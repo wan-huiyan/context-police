@@ -1,0 +1,9 @@
+{
+  "name": "context-police",
+  "description": "Measure, trim, and report the token cost of a runaway Claude Code skills/agents catalog (injected every turn + into every subagent) — verified per-project skillOverrides + global disable-model-invocation levers, an interactive HTML recap, and the durable root-cause fix (route episodic lessons to a retrieval hook, gated on measured recall@K).",
+  "version": "1.5.0",
+  "author": { "name": "Huiyan Wan" },
+  "repository": "https://github.com/wan-huiyan/context-police",
+  "license": "MIT",
+  "keywords": ["claude-code", "context-management", "tokens", "skills", "skilloverrides", "subagents"]
+}
