@@ -13,11 +13,14 @@ description: |
   makes false-hides the only harm), how to measure the overhead, how to verify Claude Code mechanics when
   the `claude-code-guide` agent itself overflows, how to emit an INTERACTIVE HTML recap of the treatment
   (`scripts/render_treatment_report.py` — a clickable, searchable drill-down of every skill by decision), and
-  the DURABLE root-cause fix when most of the catalog is claudeception lesson/traps: stop storing episodic
-  lessons as force-loaded skills — route them to a two-trigger retrieval hook (measure with a shadow-mode
-  recall@K replay before flipping `disable-model-invocation`).
+  the DURABLE root-cause analysis when most of the catalog is claudeception lesson/traps: the per-project
+  `skillOverrides` + global `disable-model-invocation` CURATION is the real, measured bloat win; the
+  "route traps to a two-trigger retrieval hook instead of force-loading" idea was tested to ground and KILLED
+  — keyword AND embedding retrievers both hit the same base-rate wall (precision-when-firing <0.3%; proven, not a
+  tuning gap); the shadow hook is removed. The curation flip WAS executed (S13): 404 traps `disable-model-invocation`d
+  after a 3-rater spot-check rescued 33 mislabeled procedures from a single-rater hide-list.
 author: Claude Code
-version: 1.5.0
+version: 1.7.0
 date: 2026-06-04
 ---
 
@@ -120,59 +123,96 @@ python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
   `playwright-screenshot-timeout-verify-via-evaluate`). On macOS, `open <file.html>` launches it in the user's browser.
 - The numbers are honest-by-construction: token estimate = `Σ(len(name)+3)/4` over the universe (bare names +
   "- " + newline ≈ 4 chars/token); "saved" = same over the OFF set; paid **every turn + per subagent** → the page
-  notes the `×N` fan-out multiplier. (First built for a static-SPA project — 866→421 off, ~7.5k→~3.1k tok, panel 22/7/1.)
+  notes the `×N` fan-out multiplier. (First built S10 for Token Torch — 866→421 off, ~7.5k→~3.1k tok, panel 22/7/1.)
 
-## The DURABLE root-cause fix: lessons-as-skills → a retrieval hook (S10)
+## The DURABLE root-cause: lessons-as-skills (two strategies — keep them separate)
 `skillOverrides` is a per-project SYMPTOM fix. The real growth driver is that a claudeception loop mints ~1 skill
 per session and force-loads all of them forever — and most of those are **episodic lesson/traps** (single-incident
 gotchas like `flask-flash-silently-dropped-without-base-render`). Those aren't skills; they're **lessons**, and
 lessons belong in a searchable archive surfaced on demand — **not** the always-loaded catalog. The bloat is a
-knowledge base in the wrong substrate.
+knowledge base in the wrong substrate. **Two strategies follow from that — do NOT conflate them:**
+1. **CURATION (the real, measured win): `disable-model-invocation` the episodic traps, keep procedures.** Hide them
+   from the always-on catalog (reclaim tokens) while they stay `/name`-invocable + `rg`-reachable. This pays
+   regardless of any retrieval mechanism. **Triage by intent (below), and decide it on *catalog-cost* grounds.**
+2. **RETRIEVAL-HOOK-AS-REPLACEMENT (tested to ground, SHELVED): surfacing the hidden traps via a context-keyed hook
+   instead of force-load.** Appealing, but a keyword retriever cannot do it (proof below). It can *assist*, not
+   *replace*. Don't sell "the hook makes it safe to hide traps" — that claim is false.
+
+**Fix the trap/procedure classifier FIRST — by DESCRIPTION INTENT, not name shape.** A hyphen-count heuristic
+mislabeled **171/886 skills** (S12): 117 name-invoked PROCEDURES called "trap" (would be wrongly hidden — pure
+recall loss: `auto-review-loop`, `barry-feature-evaluator`, a recurring conflict-resolution playbook) and 55
+genuine reactive TRAPS called "procedure" (kept force-loaded forever because of name markers like
+`worktree`/`handoff`/`sync`: `git-amend-hits-async-post-commit-hook`, `deploy-from-stale-worktree-silent-rollback`).
+The discriminator: *"does the agent go LOOKING for it BY NAME (procedure → keep force-loaded) or does it only help
+if SURFACED REACTIVELY to warn of a specific mistake (trap → curation candidate)?"* A 36-agent fan-out over the
+frontmatter descriptions is the cheap way to curate ~hundreds (intent labels: 434 trap / 452 procedure here).
 
 **Triage by reusability, not topic:** reusable PROCEDURE (multi-step, trigger generalizes — driven-development,
 worktrees, handoff harnesses) → stays an auto-surfaced skill; single-incident TRAP → routes to the archive.
 
-**Don't just delete/`off` the traps — that loses recall** (a trap's trigger situation rarely shares words with its
-kebab name; the agent can't grep for a trap it doesn't see coming). The intended fix is a **two-trigger retrieval
-hook**: `UserPromptSubmit` (keys on the prompt) + `PostToolUse` (keys on the tool command / edited file — the
-gap-closer, since most traps surface mid-session from an action), indexing the existing `SKILL.md` corpus in place
-(BM25 v1), injecting top-K relevant traps as `additionalContext`.
+**The recall worry:** hiding a trap (whether `disable-model-invocation` or `off`) drops its passive name-recognition
+(a trap's trigger situation rarely shares words with its kebab name; the agent can't grep for a trap it doesn't see
+coming). The natural idea — and what S11 built — was a **two-trigger retrieval hook** to surface the hidden traps:
+`UserPromptSubmit` (keys on the prompt) + `PostToolUse` (keys on the tool command / edited file — most traps surface
+mid-session from an action), indexing the `SKILL.md` corpus in place (BM25 v1), injecting top-K as `additionalContext`.
+**S12 measured that this hook cannot do the surfacing job (next block) — so the recall worry is real but the hook is
+NOT the answer; it is a separate, unmeasured cost/benefit call (see the flip-decision note below).**
 
-**⚠️ CORRECTION (S11, empirical): the "inject only the relevant trap, above a score floor — zero on unrelated
-turns" promise is UNMET by an absolute (or relative) BM25 floor.** Measured, the hook fires on **~99.6% of ALL
-turns** at any floor (even `git status` → 19.4, editing any `.py` → 20.9, "thanks continue" → 9.1 all clear it
-with *irrelevant* traps). BM25 magnitude tracks token-overlap-with-*some*-trap across a ~460-trap pool, not
-relevance to *this* context. Good recall (~51%) and near-100% injection are **the same under-discriminating
-score**: v1 surfaces ~half the genuine traps *only by injecting on nearly every turn*. So **v1 is fine in SHADOW
-(log-only, zero behavior change) but NOT live-ready** — going live needs a **specificity gate** (e.g. require ≥2
-*distinctive*/high-IDF matched tokens, or a semantic margin), which is open v2 work. **floor/K tuning canNOT fix
-this — the gate, not the threshold, is the problem** (max-IDF alone also fails to separate benign from real). The
-shadow log is the dataset for designing the gate.
+**⚠️ The retrieval hook can ASSIST but cannot REPLACE force-load — a keyword precision gate does NOT exist for a
+dense trap corpus (S12, proven across FIVE gate families).** A BM25 score floor fires on **~99.6% of ALL turns**
+at any floor (`git status` → 19.4, editing any `.py` → 20.9, "thanks continue" → 9.1 all clear it with *irrelevant*
+traps). S12 then tested the specificity gates S11 hoped would fix it — distinctive-token count, IDF-sum, score
+margin, distinctive-coverage — and **all fail the same way.** The load-bearing reason is a **base-rate wall**, not a
+threshold: genuine-trap moments are **~0.11% of all triggers** (105 / 93,176 in a real corpus), so even a *perfect*
+gate would fire ≤0.11% of the time; every keyword gate fires far more (6.6%–99.6%), making
+**precision-when-firing ≤ 0.31% — ~99.7% noise even at the strictest setting.** (It is NOT that "recall and firing
+fall proportionally" — the strict gate trades *favorably* on ratio; it's that the base rate is below any firing
+rate.) Mechanism: BM25/distinctiveness measures *token overlap with the nearest trap in a 425-trap pool*, not
+*relevance to this context* — only a SEMANTIC signal could, and keyword counting can't represent it. You also can't
+just drop the noisy trigger: `PostToolUse` (per bash/edit) is **both** the main noise source (100% firing, 80% of
+volume) **and** the plurality recall source (39% vs 23% for prompts; a third of recalled traps surface *only* there).
 
-**MANDATORY gate — never flip blind:** there is no counterfactual (every transcript had force-load on). Before
-turning episodic traps to `disable-model-invocation: true`, **TWO prerequisites must clear, not just recall:**
-(1) the hook must be LIVE-READY — a working precision gate (the absolute floor above is *not* it); (2) the
-trap/procedure classifier must be FIXED — S11 found a hyphen-count heuristic mislabeled **68% of measured "trap"
-events** as traps when they were reusable PROCEDURES that fire by *name* (incl. the single highest-frequency
-skill), so flipping those = pure recall loss. Run a **shadow-mode recall@K replay** AND check the injection rate;
-require `recall@5 ≥ status-quo` AND a gate that injects ~zero on unrelated turns. Only then flip. Fully reversible
-(delete the hook lines + un-flip the frontmatter). **Do NOT flip the poorly-recalled 1× trap tail "because it
-doesn't recall anyway" — that only disturbs the unmeasured passive-recognition channel, the exact fear.**
+**So: never run it LIVE, NEVER flip on the "the hook makes it safe" basis.** Going live would cry-wolf and habituate
+the model to ignore the banner. **Embeddings — the one untested PRECISION lever — were tested (S13) and FAIL the same
+way.** A semantic cosine gate over `user_prompt` (the path where NL semantics is strongest) reproduces ~23% recall at
+~99% firing and collapses recall faster than firing as you tighten — no threshold clears precision ≥2% with usable
+recall (best realized ≈0.4%). Same base-rate wall, semantic version: it's arithmetic (relevant moments are ~0.1–0.2%
+of triggers), not embedder quality. **The shadow hook is REMOVED** (both `lesson-retrieval-pilot/hook.py` lines
+deleted from `~/.claude/settings.json`; it was spawning a subprocess per tool call for a dead path). Retrieval as a
+force-load *replacement* for traps is closed; the lever is curation (Strategy 1) + the agent's own
+grep-lessons-on-task-start discipline.
 
-**Measured (claude-retrospectives, S10 build + S11 deepened, 2026-06-04):** keyword v1 → **trap-weighted
-recall@5 ≈ 51%** over *genuine* traps (robust after the classifier correction), but at a **~99.6% injection rate**
-(no working relevance gate → NOT live-ready). Three S11 corrections to the optimistic S10 read: (a) **68% of
-measured "trap" events were misclassified PROCEDURES** (the high-frequency, well-recalled ones) — de-skewed
-genuine-trap recall is ~51%; the event-weighted "65%" was procedure-inflated; (b) the **subagent leg has no viable
-fix** — subagent trap-firing is rare (0.9%, 22/2151 transcripts) and concentrates in `general-purpose`
-(un-bundleable), so a fixed per-`agent_type` bundle doesn't pay; (c) **embeddings DEFERRED** — poorly-recalled
-genuine traps miss from *no-signal* (invoked from reasoning, no matching trigger text), not paraphrase. Reference
-impl + replay/measurement harness: that repo's `tools/lesson-retrieval-pilot/` +
-`docs/research/2026-06-04-episodic-lesson-recall-substrate-research.md` (project-specific paths — verify before
-citing; pilot code is project-agnostic, promotable into this skill's `scripts/`). The source-level fix (change
-claudeception's mint default so new traps land archived) is sound *in principle* but **BLOCKED on a live-ready
-retrieval substrate** — don't ship it until the gate works. "Fix the classifier" is itself judgment-laden curation
-over ~487 candidates (description-intent, not hyphen-count), a real cost on the path to any flip — not a quick swap.
+**The flip decision the user owns — EXECUTED (S13).** *"hide the traps via `disable-model-invocation` on catalog-COST
+grounds"* is a cost/benefit call (benefit measured: ~4.9k bare-name → ~122k full-desc tok/injection × every main turn
++ every subagent + every project; cost unmeasured: passive name-recognition, which force-load wasn't delivering for
+no-signal traps anyway). Presented with numbers; user approved → applied `disable-model-invocation: true` to **404**
+confirmed traps. Don't claim a recall *gain* from hiding them.
+
+**⚠️ A single-rater hide-list MUST be independently re-rated before a destructive sweep — the gate caught real
+mislabels.** The S12 intent labels were single-rater-per-skill. Before flipping, a **blind second-rater (24 agents) +
+a 2-of-3-majority tie-break** over all 434 traps found **33 were actually name-invoked PROCEDURES** (would have been
+wrongly hidden → pure recall loss; several were skills published from the project itself). 91.7% agreement, but the
+42 disagreements skewed 36:6 toward the harmful (trap→procedure) direction — exactly where a mislabel hides a useful
+playbook. Corrected hide-list = 404. **Re-rate before you hide; the dangerous direction is procedure-mislabeled-as-trap.**
+
+**⚠️ Don't blow away an existing relevance-curated `skillOverrides` when you add the global flip — they hide DIFFERENT
+things.** The global frontmatter flag hides TRAPS everywhere (keeps `/name`); a per-project `skillOverrides` "off" map
+is usually a panel-vetted RELEVANCE hide (e.g. bio/research skills irrelevant to *this* repo) that intent labels
+CANNOT reconstruct (labels say trap/procedure, not relevant/irrelevant). Surgical fix when adding the flip:
+`new_off = old_off − (globally-flipped traps) − (proven-useful rescued procedures)` — keep the relevance hides, let
+the global flip own trap-hiding (with `/name`), restore only the spot-check-rescued playbooks.
+
+**Measured (claude-retrospectives, S10 build → S11 → S12 → S13, 2026-06-04):** classifier FIXED (intent curation: 434
+trap / 452 procedure; hyphen-count wrong on 171). Keyword retrieval: union recall@5 ≈ 54% **only at ~100% firing**;
+every gate that cuts firing cuts recall below the base-rate wall (precision-when-firing <0.3%). **Embeddings (S13):
+TESTED on `user_prompt`, same wall (best realized precision-when-firing ≈0.4%; reproduces 23% recall at 99% firing).**
+Subagent leg dead (S11: trap-firing 0.9% of 2151 subagents). **Flip EXECUTED (S13): 404 traps `disable-model-invocation`d
+(blind re-rate + tie-break rescued 33 mislabeled procedures first); shadow hook removed; claudeception mint-default
+flipped (new traps mint `disable-model-invocation` by default).** Reference impl + harness: that repo's
+`tools/lesson-retrieval-pilot/` (phase5/6/7 + `phase8_embeddings_probe.py` + `s12-results.json` +
+`phase8-embeddings-results.json` + `intent-labels.json` + `confirmed-hide-list.json` + `apply_disable_model_invocation.py`)
++ `docs/analysis/2026-06-04-context-police-s13-spotcheck-embeddings-probe-flip-ready.md` (project-specific paths —
+verify before citing; pilot code is project-agnostic, promotable into this skill's `scripts/`).
 
 ## Measuring the overhead (if you want the number)
 The fixed scaffolding re-read each turn ≈ `min(nonzero cache_read_input_tokens across the session's turns)`
