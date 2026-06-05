@@ -20,8 +20,8 @@ description: |
   tuning gap); the shadow hook is removed. The curation flip WAS executed (S13): 404 traps `disable-model-invocation`d
   after a 3-rater spot-check rescued 33 mislabeled procedures from a single-rater hide-list.
 author: Claude Code
-version: 1.7.0
-date: 2026-06-04
+version: 1.8.0
+date: 2026-06-05
 ---
 
 # context-police — Skills-Catalog Context Cost + the skillOverrides Fix
@@ -123,7 +123,7 @@ python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
   `playwright-screenshot-timeout-verify-via-evaluate`). On macOS, `open <file.html>` launches it in the user's browser.
 - The numbers are honest-by-construction: token estimate = `Σ(len(name)+3)/4` over the universe (bare names +
   "- " + newline ≈ 4 chars/token); "saved" = same over the OFF set; paid **every turn + per subagent** → the page
-  notes the `×N` fan-out multiplier. (First built S10 for Token Torch — 866→421 off, ~7.5k→~3.1k tok, panel 22/7/1.)
+  notes the `×N` fan-out multiplier. (First built for a reference project — 866→421 off, ~7.5k→~3.1k tok, panel 22/7/1.)
 
 ## The DURABLE root-cause: lessons-as-skills (two strategies — keep them separate)
 `skillOverrides` is a per-project SYMPTOM fix. The real growth driver is that a claudeception loop mints ~1 skill
@@ -140,7 +140,7 @@ knowledge base in the wrong substrate. **Two strategies follow from that — do 
 
 **Fix the trap/procedure classifier FIRST — by DESCRIPTION INTENT, not name shape.** A hyphen-count heuristic
 mislabeled **171/886 skills** (S12): 117 name-invoked PROCEDURES called "trap" (would be wrongly hidden — pure
-recall loss: `auto-review-loop`, `barry-feature-evaluator`, a recurring conflict-resolution playbook) and 55
+recall loss: `auto-review-loop`, a name-invoked feature-evaluator, a recurring conflict-resolution playbook) and 55
 genuine reactive TRAPS called "procedure" (kept force-loaded forever because of name markers like
 `worktree`/`handoff`/`sync`: `git-amend-hits-async-post-commit-hook`, `deploy-from-stale-worktree-silent-rollback`).
 The discriminator: *"does the agent go LOOKING for it BY NAME (procedure → keep force-loaded) or does it only help
@@ -177,7 +177,7 @@ the model to ignore the banner. **Embeddings — the one untested PRECISION leve
 way.** A semantic cosine gate over `user_prompt` (the path where NL semantics is strongest) reproduces ~23% recall at
 ~99% firing and collapses recall faster than firing as you tighten — no threshold clears precision ≥2% with usable
 recall (best realized ≈0.4%). Same base-rate wall, semantic version: it's arithmetic (relevant moments are ~0.1–0.2%
-of triggers), not embedder quality. **The shadow hook is REMOVED** (both `lesson-retrieval-pilot/hook.py` lines
+of triggers), not embedder quality. **The shadow hook is REMOVED** (both `scripts/pilot/hook.py` lines
 deleted from `~/.claude/settings.json`; it was spawning a subprocess per tool call for a dead path). Retrieval as a
 force-load *replacement* for traps is closed; the lever is curation (Strategy 1) + the agent's own
 grep-lessons-on-task-start discipline.
@@ -202,17 +202,17 @@ CANNOT reconstruct (labels say trap/procedure, not relevant/irrelevant). Surgica
 `new_off = old_off − (globally-flipped traps) − (proven-useful rescued procedures)` — keep the relevance hides, let
 the global flip own trap-hiding (with `/name`), restore only the spot-check-rescued playbooks.
 
-**Measured (claude-retrospectives, S10 build → S11 → S12 → S13, 2026-06-04):** classifier FIXED (intent curation: 434
+**Measured (reference project, S10 build → S11 → S12 → S13):** classifier FIXED (intent curation: 434
 trap / 452 procedure; hyphen-count wrong on 171). Keyword retrieval: union recall@5 ≈ 54% **only at ~100% firing**;
 every gate that cuts firing cuts recall below the base-rate wall (precision-when-firing <0.3%). **Embeddings (S13):
 TESTED on `user_prompt`, same wall (best realized precision-when-firing ≈0.4%; reproduces 23% recall at 99% firing).**
 Subagent leg dead (S11: trap-firing 0.9% of 2151 subagents). **Flip EXECUTED (S13): 404 traps `disable-model-invocation`d
 (blind re-rate + tie-break rescued 33 mislabeled procedures first); shadow hook removed; claudeception mint-default
-flipped (new traps mint `disable-model-invocation` by default).** Reference impl + harness: that repo's
-`tools/lesson-retrieval-pilot/` (phase5/6/7 + `phase8_embeddings_probe.py` + `s12-results.json` +
-`phase8-embeddings-results.json` + `intent-labels.json` + `confirmed-hide-list.json` + `apply_disable_model_invocation.py`)
-+ `docs/analysis/2026-06-04-context-police-s13-spotcheck-embeddings-probe-flip-ready.md` (project-specific paths —
-verify before citing; pilot code is project-agnostic, promotable into this skill's `scripts/`).
+flipped (new traps mint `disable-model-invocation` by default).** Reference impl + harness: this skill's
+`scripts/pilot/` (phase5/6/7 + `phase8_embeddings_probe.py` + the BM25/recall machinery) and the actionable
+flip applier `scripts/apply_disable_model_invocation.py` (idempotent `--dry-run`/`--apply`/`--revert`). The
+harness reads two corpus-specific inputs (`lesson-index.jsonl`, `intent-labels.json`) it does NOT ship —
+`scripts/pilot/README.md` documents how to regenerate them for your own `~/.claude` and reproduce every number.
 
 ## Measuring the overhead (if you want the number)
 The fixed scaffolding re-read each turn ≈ `min(nonzero cache_read_input_tokens across the session's turns)`

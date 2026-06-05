@@ -7,6 +7,6 @@
     "name": "context-police",
     "source": "./plugins/context-police",
     "description": "Patrol the context budget: measure the skills/agents catalog cost, trim it per-project (skillOverrides) or globally (disable-model-invocation), emit an interactive HTML recap, and curate episodic lessons out of the always-on catalog by description intent.",
-    "version": "1.7.0"
+    "version": "1.8.0"
   }]
 }
