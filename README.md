@@ -58,6 +58,22 @@ The native budget makes context-police **more** useful, not less: `/doctor` is n
 
 ---
 
+## 🌐 Works across harnesses (the problem is portable, the levers differ)
+
+The catalog-bloat **problem** and the curation **methodology** aren't Claude-specific — the [Agent Skills open standard](https://agentskills.io) (`SKILL.md`) is shared by Claude Code, Cursor, Codex, Copilot CLI, and Gemini CLI. The always-on *listing* of skill names+descriptions scales with N on all of them; what differs is whether the harness has a **native budget** to bound it (researched 2026-06-17):
+
+| Harness | Native listing budget? | Per-skill disable (keep manually-invocable) | Sub-agent ×N? |
+|---|---|---|---|
+| **Claude Code** | ✅ `skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536 (`/doctor`) | `skillOverrides`, `disable-model-invocation` | yes |
+| **Codex** | ✅ ~2% / 8 000-char cap (descriptions shorten, then omit-with-warning) | `allow_implicit_invocation:false` / `enabled=false` | yes |
+| **Cursor 2.4** | ❌ none documented | **`disable-model-invocation: true`** + `paths` glob | unverified |
+| **Copilot CLI** | ❌ none | `disable-model-invocation` / `user-invocable:false` + `/skills` | **no** (sub-agents inherit no skills) |
+| **Gemini CLI** | ❌ none | `/skills disable` + `@`-invoke | unverified |
+
+**So:** on Claude Code and Codex the budget bounds the cost automatically; on **Cursor, Copilot CLI, and Gemini CLI there's no documented budget — context-police's manual curation is still the live answer.** And `disable-model-invocation` is part of the standard, so it works **verbatim on Cursor and Copilot CLI**, not only Claude Code. See the skill's *"Porting to another harness"* section for the recipe.
+
+---
+
 ## 🕹️ Quick Start
 
 Just describe the symptom and Claude reaches for the skill:
@@ -217,6 +233,7 @@ No third-party Python packages — the recap script is stdlib-only.
 
 ## 📜 Version history
 
+- **v2.0.0** — **harness-agnostic reframe.** Led with the portable problem + curation methodology, demoted the Claude Code levers to a clearly-labeled *implementation* section, added a researched **cross-harness landscape** (Cursor / Codex / Copilot CLI / Gemini CLI — who has a native budget, who still needs manual curation; `disable-model-invocation` is part of the open standard and works verbatim on Cursor + Copilot CLI) and a **"porting to another harness"** recipe, and folded the retrieval-hook / 122k / forward-sweep work into a compact **History** footnote. Net: as a Claude-Code "fix the cost" tool the native budget made ~half of it redundant; reframed as *"manage skill-catalog cost in any auto-minting harness,"* its durable relevance is broader.
 - **v1.10.0** — **the `disable-model-invocation` dual-role + reverse-audit lesson.** The flag is *also* the **correct** config for a user slash-command (it stops the *model* auto-firing `/changelog`, `/lfg`, `/setup`… while keeping `/name`) — not just a trap-hide. So a reverse audit that flags "name-invoked → restore" is a **false-positive machine**: a full body-read audit of all 487 hidden skills flagged 17 "wrongly hidden," but on a deterministic `argument-hint`/`allowed-tools` check ~16 were correctly-configured commands (restoring them would let the model auto-fire commands *and* re-bloat the catalog). Genuine restores ≈ 1. Also: a conservative re-rated **forward** extension confirmed **0** new safe traps — post-budget the hide-sweep is largely played out; the remaining value is reading `/doctor` right, the per-project `off` lever, and *not over-hiding*. Added classification-rigor rules (intent-not-name, blind re-rate, deterministic-over-LLM).
 - **v1.9.0** — **Claude Code shipped the native catalog budget** (`skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536, surfaced by `/doctor`) in **v2.1.105 (2026-04-13)** — ~7 weeks *before* this skill was first written; the original "docs-derived, not measured" note was about this exact mechanism, now verified. Documented it, made `/doctor` the canonical readout, flagged **raising the budget fraction as the anti-pattern** (its ~111k opt-in cost is consistent with — same ballpark as — the old ~122k estimate), and **corrected two now-false claims** — *"standalone skills inject as bare names"* and *"`name-only` is a blanket no-op"* — which only held before the budget made description-dropping usage-ranked.
 - **v1.7.0** — the root-cause work resolved: curation works, the retrieval-hook replacement doesn't.
