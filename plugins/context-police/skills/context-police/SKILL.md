@@ -117,7 +117,8 @@ code.claude.com/docs/en/settings, 2026-06-17) — `/doctor` surfaces all of them
   inherent property of standalone skills.
 - **THE ANTI-PATTERN: do NOT raise `skillListingBudgetFraction` to silence `/doctor`.** The default 1% budget *is*
   context-police running natively. Raising it to keep all descriptions costs **~111k tokens/session** (`/doctor`'s own
-  number — which independently CONFIRMS this skill's S13 ~122k full-desc estimate) and burns rate limits faster. The
+  number — in the same ballpark as this skill's S13 ~122k full-desc estimate; not an exact confirmation, since /doctor
+  measures the CURRENT catalog with ~486 already hidden, vs the whole-catalog 122k) and burns rate limits faster. The
   aligned move is the OPPOSITE: shrink the catalog so fewer descriptions need dropping → continue the
   `disable-model-invocation` sweep on residual episodic traps (the lever that already removed ~486 skills here) plus
   per-project `"off"`. `/doctor`'s "563 descriptions will be dropped" is what REMAINS *after* those levers fired — the
