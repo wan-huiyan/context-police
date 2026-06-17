@@ -20,7 +20,7 @@ description: |
   tuning gap); the shadow hook is removed. The curation flip WAS executed (S13): 404 traps `disable-model-invocation`d
   after a 3-rater spot-check rescued 33 mislabeled procedures from a single-rater hide-list.
 author: Claude Code
-version: 1.9.0
+version: 1.10.0
 date: 2026-06-17
 ---
 
@@ -123,6 +123,58 @@ code.claude.com/docs/en/settings, 2026-06-17) — `/doctor` surfaces all of them
   `disable-model-invocation` sweep on residual episodic traps (the lever that already removed ~486 skills here) plus
   per-project `"off"`. `/doctor`'s "563 descriptions will be dropped" is what REMAINS *after* those levers fired — the
   budget is silently absorbing the rest, so the warning is mostly informational, not a regression to fix.
+
+## `disable-model-invocation` has TWO roles — don't conflate them (the reverse-audit lesson, S-2026-06-17)
+The flag does ONE mechanical thing: removes a skill from the **model-invocable** catalog while keeping it
+`/name`-invocable by the user. But that serves TWO different intents, and conflating them causes a destructive
+false-positive:
+1. **Context-saving (the trap sweep):** hide episodic lesson/traps so they don't cost catalog tokens. Reversible.
+2. **The CORRECT, intended config for a USER SLASH-COMMAND** (`changelog`, `setup`, `lfg`, `slfg`,
+   `resolve-pr-parallel`, the `ce-*`/`todo-*` suites): the flag is exactly what STOPS the model from spontaneously
+   auto-firing the command while the user keeps `/name`. For a command the flag is RIGHT — it is **not** a "hidden
+   procedure," it is correct configuration. Built-in commands ship WITH it (S6 saw `changelog`/`setup`/`lfg`/
+   `todo-create`/`orchestrating-swarms` flagged *before* any sweep existed).
+
+**The reverse-audit trap (measured):** auditing the already-flipped set for "wrongly-hidden procedures" through a
+*"name-invoked → restore"* lens produces massive FALSE POSITIVES — it flags every user command as a mislabeled
+procedure. Restoring them is actively HARMFUL: it makes the model auto-invoke commands (e.g. the autonomous-engineering
+pipelines `lfg`/`slfg`) AND re-bloats the catalog. A full reverse audit (15 Opus agents, body-reads of all 487 hidden)
+flagged **17** "restore" candidates; on verification **~16 were correctly-configured user commands**; genuine restores
+≈ **1** (a model-applied design discipline with no command markers). The interim "~7% mislabeled" sample estimate was
+inflated by this same framing error.
+
+**The discriminator (DETERMINISTIC beats another LLM pass):** does the skill's frontmatter carry `argument-hint` /
+`allowed-tools`, or read as "# … Command"? → it's a USER command; the flag is CORRECT; do **not** restore. Only a
+*model-applied* skill (a reusable discipline/procedure the MODEL surfaces, no command markers) is a legitimate restore
+candidate — and confirm with PROVENANCE: `git log -L`/`git blame` the `disable-model-invocation` line; present at mint
+= built-in/intended (keep), added by a sweep = possible victim.
+
+**Narrow the "restoring is low-risk" premise:** it holds ONLY for non-command skills (worst case a trap reappears in
+the catalog — cheap). Restoring a COMMAND is a behavior change (the model can now auto-fire it), not cosmetic. Never
+bulk-restore on a name-based lens; verify command-markers first.
+
+## Classification rigor for ANY bulk frontmatter sweep (forward OR reverse)
+- Classify by description **INTENT**, never name shape (warning-shaped names are usually real traps; command-shaped
+  "lessons" exist). Names lie — the S6 hyphen-count heuristic mislabeled 171/886.
+- **Conservative bias, asymmetric:** hiding a procedure (or restoring a command) is the silent, costly error; the
+  opposite error is harmless. When in doubt, take the harmless side.
+- A deliberately-lenient first pass **over-flags ~15×** (here: 16/343 → blind 3-of-3 re-rate confirmed **0**). A BLIND
+  re-rate by independent raters reading the **bodies** (not just descriptions) is mandatory before any destructive
+  change; require strong agreement (2-of-3 minimum, 3-of-3 for the low-reward case).
+- Prefer a **deterministic** check wherever one exists (grep `argument-hint`/`allowed-tools` for "is this a command")
+  over an LLM vote.
+
+## Post-budget: is the forward hide-sweep still worth running? (mostly NO — and that's fine)
+With the native 1% budget (the v1.9.0 section) collapsing descriptions automatically, the forward
+`disable-model-invocation` sweep now reclaims only bare NAMES (~3k tokens for ~500 skills; ~2k after protecting
+keepers), real only on heavy fan-out. A conservative re-rated extension over ~343 unflagged candidates confirmed
+**0 new safe traps** — the remaining unflagged catalog is genuinely procedures/domain/commands, not hidden traps.
+**The hiding lever is largely played out.** What still pays:
+- the per-project relevance **`off`** lever (domain skills → this-project denylist; the correct lever, distinct from the
+  global flag);
+- reading `/doctor` correctly + the **don't-raise-`skillListingBudgetFraction`** anti-pattern;
+- **NOT over-hiding** — the reverse-audit discipline above (and never auto-flagging user commands as traps);
+- the trap/procedure classification method, reusable for any future bulk frontmatter operation.
 
 ## Building a WIDE per-project denylist safely (when 211-conservative isn't enough)
 Going past the obvious bio/infra one-offs into the claudeception lesson/trap bulk needs care. It is
