@@ -20,8 +20,8 @@ description: |
   tuning gap); the shadow hook is removed. The curation flip WAS executed (S13): 404 traps `disable-model-invocation`d
   after a 3-rater spot-check rescued 33 mislabeled procedures from a single-rater hide-list.
 author: Claude Code
-version: 1.8.0
-date: 2026-06-05
+version: 1.9.0
+date: 2026-06-17
 ---
 
 # context-police — Skills-Catalog Context Cost + the skillOverrides Fix
@@ -53,7 +53,12 @@ overflow on launch.
    `skillOverrides` is a settings.json map keyed by skill name; value `"on" | "name-only" |
    "user-invocable-only" | "off"`. `"off"` removes the skill from the model-invocable catalog (drops its
    context cost) without editing/deleting its SKILL.md; `"name-only"` keeps it discoverable but drops the
-   description. Example: `{"alphafold-database":"off","scanpy":"off"}`.
+   description. Example: `{"alphafold-database":"off","scanpy":"off"}`. **`skillOverrides` requires CC v2.1.129+,
+   does NOT apply to plugin skills** (manage those via `/plugin` / `enabledPlugins`), and the **`/skills` menu
+   writes its overrides to `.claude/settings.local.json`** (Local > Project precedence) — so menu-written entries
+   layer OVER any `skillOverrides` you hand-authored in `.claude/settings.json`; reconcile across both files. A
+   plugin skill with a bloated description (e.g. `publish-skill` ~44k chars) therefore can't be trimmed here —
+   only its author or the global `maxSkillDescriptionChars` cap (below) affects it.
 3. **Scope it per-project — and mind the precedence.** Settings precedence is Managed > CLI > Local >
    **Project > User**, and same-key project settings **OVERRIDE (replace)** user settings (only *permissions*
    merge). So:
@@ -73,14 +78,50 @@ overflow on launch.
    juggling). Use it to bound the catalog at the source (mint new niche lesson/traps WITH the flag) + a one-time
    sweep of the existing backlog.
 6. **Two CORRECTIONS to the naive durable plan:**
-   - **`"name-only"` is a NO-OP for standalone skills** — they already inject as bare names (no description in
-     the catalog). Only `"off"` (or `disable-model-invocation`/archive) reclaims their tokens.
+   - **`"name-only"` reclaims tokens ONLY for a skill the budget is still showing WITH a description** (i.e. a
+     *most-used* standalone skill — see "## The native catalog budget" below). **Least-used** standalone skills are
+     ALREADY collapsed to bare names by `skillListingBudgetFraction`, so for them `name-only` is a no-op and only
+     `"off"` (or `disable-model-invocation`/archive) reclaims the *name*. (Pre-budget — when this skill first claimed
+     "standalone skills already inject as bare names" — that was a *blanket* no-op; the native budget made it
+     usage-ranked, so it no longer holds for the most-used tail.)
    - **`find-skills`/`search-skill` search EXTERNAL marketplaces only** (`npx skills` / `site:`-scoped web
      search) — NEITHER reads `~/.claude/skills/` on disk. So they are NOT a local re-discovery path for hidden
      skills. Local re-surfacing is via claudeception's mint-time `rg` (dedup) + manual `/name` only. Don't sell
      "archive + find-skills will resurface it" — it won't.
    - Caveat: the policy of hiding all lesson/trap skills rests on the (docs-derived, **unmeasured**) premise that
      bare-name auto-recall is already marginal at scale — present it to the user as a tradeoff, not a slam dunk.
+
+## The native catalog budget — Claude Code now auto-polices this (verified via `/doctor`, 2026-06-17)
+**Claude Code v2.1.105+ shipped a native version of this skill's whole thesis.** Three settings (verified against
+code.claude.com/docs/en/settings, 2026-06-17) — `/doctor` surfaces all of them under its **Skills ⚠** check:
+- **`skillListingBudgetFraction`** (default **`0.01`** = 1% of the context window). The injected catalog gets a 1%
+  budget; when it exceeds it, **the descriptions of the LEAST-USED skills collapse to bare names** (still `/name`-
+  and model-invocable — Claude just can't see *why* to use them). Usage-ranked auto-curation, for free, every
+  session. **This SUPERSEDES the old "secondary win (docs-derived, not measured)" note** — it is now a real, named,
+  measured knob, and `/doctor` is its readout (`N descriptions will be dropped (X%/1% of context)`).
+- **`maxSkillDescriptionChars`** (default **`1536`**). Per-skill cap on combined `description`+`when_to_use`; longer
+  text is **truncated**. INDEPENDENT of the budget — a skill the budget keeps can still be truncated by this. This is
+  `/doctor`'s "N descriptions exceed the per-entry cap" line. Keep your OWN skills' descriptions ≤1536 so the tail
+  (usually the least trigger-relevant narrative) isn't silently cut. Note: a budget-COLLAPSED skill (bare name) gets
+  no description at all, so trimming its description won't surface it — the cap only bites skills the budget is still
+  showing. Both knobs require CC v2.1.105+.
+- **`/doctor` is now the canonical measurement tool** — it replaces "WebFetch the docs to verify mechanics" as the
+  fast check: it prints the truncation count, which skills are affected, the per-entry-cap offenders, and the token
+  cost of opting in to full descriptions. (`Measuring the overhead` below is still the way to get the per-injection
+  scaffolding floor by hand.)
+
+**CORRECTION — the budget changed two facts this skill used to assert:**
+- *"standalone skills inject as bare names (no description)"* — **no longer universal.** Inspect your own injected
+  available-skills list: it's a MIX — most-used standalone skills DO carry (truncated-at-1536) descriptions; only the
+  least-used tail is bare names. The old "~7.6k bare-names/injection" figure was the budget-COLLAPSED floor, not an
+  inherent property of standalone skills.
+- **THE ANTI-PATTERN: do NOT raise `skillListingBudgetFraction` to silence `/doctor`.** The default 1% budget *is*
+  context-police running natively. Raising it to keep all descriptions costs **~111k tokens/session** (`/doctor`'s own
+  number — which independently CONFIRMS this skill's S13 ~122k full-desc estimate) and burns rate limits faster. The
+  aligned move is the OPPOSITE: shrink the catalog so fewer descriptions need dropping → continue the
+  `disable-model-invocation` sweep on residual episodic traps (the lever that already removed ~486 skills here) plus
+  per-project `"off"`. `/doctor`'s "563 descriptions will be dropped" is what REMAINS *after* those levers fired — the
+  budget is silently absorbing the rest, so the warning is mostly informational, not a regression to fix.
 
 ## Building a WIDE per-project denylist safely (when 211-conservative isn't enough)
 Going past the obvious bio/infra one-offs into the claudeception lesson/trap bulk needs care. It is
@@ -222,14 +263,18 @@ pre-warmed cache on turn 1) — calibrate, don't assume. Subagent transcripts
 (`~/.claude/projects/**/subagents/**/agent-*.jsonl`) carry their own per-dispatch floor → that's the N× story.
 
 ## Verification
+- **Run `/doctor` (the Skills check) — it's the authoritative readout:** descriptions-dropped count + `%/1% of
+  context`, per-entry-cap offenders, and the opt-in token cost. Re-run after any sweep/override change to confirm the
+  number moved the right way.
 - After adding project `skillOverrides`, restart Claude Code and confirm the injected skills list shrank.
 - `git check-ignore` / a dry-run generator can quantify how many skills a denylist would turn off before you
   apply it. Reversible: delete an entry or set `"on"`.
 
 ## Notes
-- **When `claude-code-guide` overflows, you can't use it to answer Claude Code questions** — verify mechanics
-  by `WebFetch`-ing `code.claude.com/docs/...` directly (note `docs.claude.com/en/docs/claude-code/*` 301-
-  redirects to `code.claude.com/docs/en/*`), or ask from a session where the catalog is already trimmed.
+- **When `claude-code-guide` overflows, you can't use it to answer Claude Code questions** — run `/doctor` for the
+  skills-catalog numbers directly, or verify mechanics by `WebFetch`-ing `code.claude.com/docs/...` (note
+  `docs.claude.com/en/docs/claude-code/*` 301-redirects to `code.claude.com/docs/en/*`), or ask from a session where
+  the catalog is already trimmed.
 - Managed-only knobs exist for org control: `strictPluginOnlyCustomization` (block user/project skills),
   `blockedMarketplaces`, `strictKnownMarketplaces` — not needed for a personal per-project trim.
 - See also: `concurrent-session-curating-shared-global-dir` (the shared skills dir grows live across sessions),

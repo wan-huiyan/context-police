@@ -26,7 +26,7 @@
 
 Claude Code injects the **whole catalog of installed skills + agents into context on every turn** — and into **every subagent** you spin up. That's fine with a handful of skills. But if you run a [claudeception](https://github.com/anthropics/claude-code)-style learning loop that mints ~1 new skill per session, your `~/.claude/skills/` quietly balloons to **800+** entries... and *every single one* is force-loaded, forever, paid again on every fan-out.
 
-The bill (measured on a real ~925-skill catalog): **~248k tokens** of skill descriptions per full injection — **~24× over a 1% context budget** — re-read every turn and multiplied across concurrent subagents. Small-context agent types (like `claude-code-guide`) can even overflow on launch with *"Prompt is too long" at 0 tokens.*
+The bill (measured on a real ~925-skill catalog): **~248k tokens** of skill descriptions per full injection — **~24× over a 1% context budget**. Since **v2.1.105 (2026-04-13)** Claude Code *enforces* that 1% budget natively (`skillListingBudgetFraction`): it collapses the least-used descriptions to bare names rather than pay the full bill, so ~248k is the *opt-in ceiling*, not the silent default (see ["Claude Code now does part of this natively"](#-claude-code-now-does-part-of-this-natively-since-v21105) below). It's still re-read every turn and multiplied across concurrent subagents, and small-context agent types (like `claude-code-guide`) can even overflow on launch with *"Prompt is too long" at 0 tokens.*
 
 **context-police is the toolkit to handle it, honestly:**
 
@@ -36,6 +36,25 @@ The bill (measured on a real ~925-skill catalog): **~248k tokens** of skill desc
 4. 🧠 **Fix the root cause** — recognize that most of the bloat is *episodic lessons mis-stored as force-loaded skills*, then **curate them out of the always-on catalog** with `disable-model-invocation` (triaged by *description intent*, not name shape). A tempting alternative — surfacing the hidden lessons via an on-demand **retrieval hook** instead of force-loading — was tested to ground and **killed** (a base-rate wall: precision-when-firing <0.3% for both keyword *and* embedding retrievers). The curation flip pays regardless; the hook does not.
 
 It's **allow-by-default** the whole way down: a skill is only ever hidden when it's clearly irrelevant to your current work, and every move is reversible.
+
+---
+
+## 🆕 Claude Code now does part of this natively (since v2.1.105)
+
+Good news, not bad: **Claude Code shipped a native version of this skill's core thesis** — in **v2.1.105, released 2026-04-13**. Run `/doctor` and look at the **Skills** check to see it live. Two settings do the work:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `skillListingBudgetFraction` | `0.01` (1%) | Caps the catalog at ~1% of the context window. When it's over budget, the **least-used** skills' descriptions collapse to bare names — still `/name`- and model-invocable, Claude just can't see *why* to reach for them. |
+| `maxSkillDescriptionChars` | `1536` | Per-skill cap on the `description` text; anything longer is truncated. This is `/doctor`'s *"N descriptions exceed the per-entry cap"* line. |
+
+So `/doctor` now tells you something like *"563 skill descriptions will be dropped (10.8%/1% of context)… opting in would cost ~111k tokens every session."* Read it right:
+
+- **That warning is the budget protecting you — it's context-police running automatically.** The ~111k is the bill you'd pay *if you opted in* to full descriptions; the 1% default silently absorbs it.
+- **⚠️ Do NOT "fix" the warning by raising `skillListingBudgetFraction`.** That's the anti-pattern — it pays the ~111k every turn and burns rate limits faster. (That figure also independently **confirms** this skill's earlier ~122k full-description estimate.)
+- **The aligned fix is the opposite: shrink the catalog so the budget drops *irrelevant* skills, not useful ones** — exactly what this skill's `disable-model-invocation` sweep + per-project `"off"` do. `/doctor`'s drop-count is what *remains after* those levers fire.
+
+The native budget makes context-police **more** useful, not less: `/doctor` is now the canonical readout for the cost this skill was built to measure, and the skill tells you which lever actually helps versus the one that backfires.
 
 ---
 
@@ -97,7 +116,7 @@ Either way, restart Claude Code so the skill is picked up.
 
 | | 🙀 Without context-police | 😺 With context-police |
 |---|---|---|
-| **Catalog cost** | ~248k tokens of descriptions re-injected every turn, ×N per subagent — unmeasured, unbudgeted | Measured to a number; trimmed ~48% per-project; the `×N` fan-out multiplier made explicit |
+| **Catalog cost** | CC's 1% budget silently collapses ~half your descriptions to bare names — you don't see which, or what the ~100k+/turn opt-in bill is | Measured via `/doctor` + the cached-prefix floor; catalog trimmed ~48% per-project so the budget drops *irrelevant* skills, not useful ones; the `×N` fan-out multiplier made explicit |
 | **Small subagents** | `claude-code-guide` overflows: *"Prompt is too long" at 0 tokens* | Probe → it's *that agent type's* window, not a universal break; trim the noise |
 | **Cutting noise** | Delete skills (lossy, irreversible) or `enabledPlugins` per-project (footgun — replace-semantics nukes everything you didn't relist) | `skillOverrides` per-project (scoped, reversible) — nothing deleted, all still `/name`-invocable |
 | **Knowing what changed** | A diff of a settings file nobody reads | A clickable, searchable **HTML recap** of every skill by decision + reviewer reason |
@@ -112,7 +131,7 @@ The "Without" column isn't a strawman — `enabledPlugins` per-project and bulk-
 - **The verified levers, with the gotchas spelled out:**
   - `skillOverrides` (per-project, in `.claude/settings.json`) — the right tool for scoping noise to one project. **Not** `enabledPlugins` per-project (settings precedence: project *replaces* user, so it would disable every plugin you didn't relist).
   - `disable-model-invocation: true` (SKILL.md frontmatter) — the verified **global** lever: drops a skill's *name* from the catalog (reclaims the full per-skill cost) while keeping it `/name`-invocable + `rg`-reachable.
-  - Two corrections to the naive plan: `"name-only"` is a **no-op** for standalone skills (they already inject as bare names); and `find-skills`/`search-skill` search **external** marketplaces only — they do **not** re-surface your hidden local skills.
+  - Two corrections to the naive plan: `"name-only"` only reclaims tokens for a skill the native budget is *still showing with a description* (a most-used one) — the least-used tail is already collapsed to bare names, so for them it's a **no-op**; only `"off"` reclaims the *name*. And `find-skills`/`search-skill` search **external** marketplaces only — they do **not** re-surface your hidden local skills.
 - **A safe wide-denylist method** (the conservative cut → ~48%): anchored `startswith` matching (never substring — `"ml-"` would eat `html-...`), an explicit PROTECT allowlist for your real stack, a review-panel vetting that keeps **ON** anything *any* reviewer flags (union, not intersection — because a wrongly-hidden relevant skill is the only harm).
 - **An interactive HTML recap** (`scripts/render_treatment_report.py`) — arcade-styled, self-contained, opens from `file://`, with clickable tiles → a searchable explorer of every skill by decision (off / on / kept / added / override + reason).
 - **The durable root-cause analysis** — why the bloat is a knowledge base in the wrong substrate, the *two distinct strategies* that follow (curation vs retrieval-hook-replacement), and the measured reason only one of them works.
@@ -155,10 +174,10 @@ Don't sell *"the hook makes it safe to hide traps"* — that claim is false. Hid
 This skill leans **cautious**, on purpose. The honest caveats:
 
 - **Allow-by-default → the only failure mode is a wrongly-hidden *relevant* skill.** A missed cut is just unrealized savings (harmless); an over-eager cut hides something you wanted. That asymmetry is why the wide-denylist method uses a PROTECT allowlist and a union-not-intersection review panel. It still isn't zero-risk — review the OFF set.
-- **The global `disable-model-invocation` lever rests on an *unmeasured* premise.** Hiding a skill's name assumes bare-name auto-recall is *already marginal at scale* — that's docs-derived reasoning, **not** a measured counterfactual (every transcript ever recorded had force-load ON). Treat the global mass-hide as a tradeoff (measured *benefit*: ~4.9k bare-name → ~122k full-desc tokens/injection, every turn × every subagent × every project; unmeasured *cost*: passive name-recognition), not a slam dunk. The flip is a cost/benefit call **you** own.
+- **The global `disable-model-invocation` lever rests on an *unmeasured* premise.** Hiding a skill's name assumes bare-name auto-recall is *already marginal at scale* — that's docs-derived reasoning, **not** a measured counterfactual (every transcript ever recorded had force-load ON). Treat the global mass-hide as a tradeoff (measured *benefit*: ~4.9k bare-name → ~122k full-desc tokens/injection — now independently confirmed by `/doctor`, which reports ~111k to opt back into full descriptions — every turn × every subagent × every project; unmeasured *cost*: passive name-recognition), not a slam dunk. The flip is a cost/benefit call **you** own.
 - **The retrieval-hook replacement was tested and KILLED — don't expect it to make hiding "safe".** A keyword score floor fires on **~99.6% of all turns**, and every specificity gate (distinctive-token count, IDF-sum, score margin, coverage) hits the same **base-rate wall**: genuine-trap moments are ~0.1% of triggers, so precision-when-firing is **<0.3%**. **Embeddings fail identically** (~23% recall at ~99% firing). It's arithmetic, not a tuning gap — so the shadow hook was removed and curation is the only lever. Two real prerequisites *do* gate curation: fix the classifier **by description intent** (a hyphen-count heuristic mislabeled 171/886 skills), and **independently re-rate a single-rater hide-list before any destructive sweep** (a blind second-rater + tie-break rescued 33 procedures wrongly marked as traps).
 - **Don't blow away an existing relevance-curated `skillOverrides` when you add the global flip.** They hide *different* things: the global flag hides *traps everywhere* (keeps `/name`); a per-project `skillOverrides` "off" map is usually a *relevance* hide (bio/research skills irrelevant to this repo) that intent labels can't reconstruct. Surgical merge: `new_off = old_off − (globally-flipped traps) − (rescued procedures)`.
-- **`"name-only"` does nothing for standalone skills**, and `find-skills`/`search-skill` won't resurface your hidden local skills. Don't rely on either as a safety net.
+- **`"name-only"` is a no-op for any standalone skill the native budget has *already* collapsed to a bare name** (the least-used tail) — it only reclaims tokens for the most-used skills still showing a description; and `find-skills`/`search-skill` won't resurface your hidden local skills. Don't rely on either as a safety net.
 - **It can't read minds about *your* stack.** The denylist is a draft for *you* to review, not an auto-apply.
 - **Takes effect on restart** — the catalog is injected at session start.
 
@@ -198,6 +217,7 @@ No third-party Python packages — the recap script is stdlib-only.
 
 ## 📜 Version history
 
+- **v1.9.0** — **Claude Code shipped the native catalog budget** (`skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536, surfaced by `/doctor`) in **v2.1.105 (2026-04-13)** — ~7 weeks *before* this skill was first written; the original "docs-derived, not measured" note was about this exact mechanism, now verified. Documented it, made `/doctor` the canonical readout, flagged **raising the budget fraction as the anti-pattern** (its ~111k opt-in cost *confirms* the old ~122k estimate), and **corrected two now-false claims** — *"standalone skills inject as bare names"* and *"`name-only` is a blanket no-op"* — which only held before the budget made description-dropping usage-ranked.
 - **v1.7.0** — the root-cause work resolved: curation works, the retrieval-hook replacement doesn't.
   - **Separated the two strategies** (curation vs retrieval-hook-replacement) and fixed the trap/procedure classifier to triage by **description intent**, not hyphen count (171/886 mislabeled).
   - **Proved the keyword hook can't replace force-load** across five gate families — a **base-rate wall** (genuine-trap moments ~0.1% of triggers), precision-when-firing <0.3%. **Embeddings then tested and fail identically** (~23% recall @ ~99% firing). Shadow hook removed.
