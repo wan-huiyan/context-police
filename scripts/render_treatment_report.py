@@ -16,7 +16,7 @@ Usage:
     --settings .claude/settings.json \
     [--skills-dir ~/.claude/skills] \
     [--decisions panel-decisions.json] \
-    [--title "My Project"] [--out skill-treatment.html]
+    [--title "My Project"] [--out skill-treatment.html] [--json-out skill-treatment.json]
 
 panel-decisions.json (all keys optional):
   {
@@ -29,7 +29,7 @@ Token math: the injected catalog cost ≈ Σ(len(name)+3)/4 over the universe (b
 "- " + newline, ~4 chars/token). "Saved" ≈ the same over the OFF set. Paid every turn AND
 per subagent → the page notes the ×N fan-out multiplier.
 """
-import argparse, json, pathlib, sys
+import argparse, json, pathlib, sys, datetime
 
 def load_off(settings_path: pathlib.Path) -> set:
     if not settings_path.is_file():
@@ -40,10 +40,45 @@ def load_off(settings_path: pathlib.Path) -> set:
 def tok(names) -> int:
     return round(sum(len(n) + 3 for n in names) / 4)
 
+def build_receipt(*, title, universe, off, on, dec, full_tok, off_tok, settings_path, skills_dir):
+    total = len(universe)
+    off_count = len(off)
+    pct = round(100 * off_count / max(total, 1))
+    return {
+        "schema_version": "context_police.treatment_report.v1",
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+        "title": title,
+        "inputs": {
+            "settings": str(settings_path),
+            "skills_dir": str(skills_dir),
+        },
+        "summary": {
+            "total_skills": total,
+            "off_skills": off_count,
+            "on_skills": len(on),
+            "off_percent": pct,
+            "estimated_full_catalog_tokens_per_injection": full_tok,
+            "estimated_saved_tokens_per_injection": off_tok,
+        },
+        "privacy": {
+            "raw_skill_contents_included": False,
+            "settings_values_included": False,
+            "skill_names_included": True,
+            "review_reasons_included": any(dec[k] for k in dec),
+        },
+        "decisions": {
+            "off": off,
+            "on": on,
+            **dec,
+        },
+    }
+
+
 def build(args):
     skills_dir = pathlib.Path(args.skills_dir).expanduser()
     universe = sorted(d.name for d in skills_dir.iterdir() if (d / "SKILL.md").exists())
-    off = sorted(n for n in load_off(pathlib.Path(args.settings)) if n in set(universe))
+    settings_path = pathlib.Path(args.settings).expanduser()
+    off = sorted(n for n in load_off(settings_path) if n in set(universe))
     on = sorted(set(universe) - set(off))
 
     dec = {"pulls": [], "adds": [], "override": []}
@@ -54,6 +89,17 @@ def build(args):
 
     full_tok, off_tok = tok(universe), tok(off)
     pct = round(100 * len(off) / max(len(universe), 1))
+    receipt = build_receipt(
+        title=args.title or "this project",
+        universe=universe,
+        off=off,
+        on=on,
+        dec=dec,
+        full_tok=full_tok,
+        off_tok=off_tok,
+        settings_path=settings_path,
+        skills_dir=skills_dir,
+    )
     payload = {"total": len(universe), "off": off, "on": on, **dec}
 
     has_panel = any(dec[k] for k in dec)
@@ -85,6 +131,10 @@ def build(args):
     out = pathlib.Path(args.out).expanduser()
     out.write_text(html)
     print(f"wrote {out}  ({len(html)} bytes)")
+    if args.json_out:
+        json_out = pathlib.Path(args.json_out).expanduser()
+        json_out.write_text(json.dumps(receipt, indent=2) + "\n")
+        print(f"wrote {json_out}  ({json_out.stat().st_size} bytes)")
     print(f"universe {len(universe)} · off {len(off)} ({pct}%) · on {len(on)} · "
           f"~{full_tok/1000:.1f}k tok/injection → ~{off_tok/1000:.1f}k saved"
           + (f" · panel {len(dec['pulls'])}/{len(dec['adds'])}/{len(dec['override'])}" if has_panel else ""))
@@ -226,4 +276,5 @@ if __name__ == "__main__":
     ap.add_argument("--decisions", help="optional panel-decisions JSON (pulls/adds/override)")
     ap.add_argument("--title", help="project label shown in the header")
     ap.add_argument("--out", default="skill-treatment.html", help="output HTML path")
+    ap.add_argument("--json-out", help="optional machine-readable JSON receipt path")
     build(ap.parse_args())
