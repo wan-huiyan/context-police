@@ -171,6 +171,18 @@ python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
 - The `--decisions` file is optional (`{"pulls":[…],"adds":[…],"override":[…]}`); omit it for a plain off/on drill-down, pass it to surface the review-panel reasons.
 - All data is inlined — no server, no build. On macOS, `open skill-treatment.html`.
 
+**Optional JSON receipt for hooks/CI/agents:**
+
+```bash
+python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
+  --settings .claude/settings.json \
+  --skills-dir ~/.claude/skills \
+  --out skill-treatment.html \
+  --json-out skill-treatment.json
+```
+
+The JSON receipt mirrors the HTML recap with `schema_version`, token estimates, off/on counts, decision lists, and privacy flags. That gives automation a stable artifact to attach to CI logs or agent handoffs without scraping the HTML report.
+
 ---
 
 ## 🧠 The durable fix (two strategies — keep them separate)
