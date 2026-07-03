@@ -1,6 +1,6 @@
 # 🚓 context-police
 
-> A Claude Code skill that **patrols your context budget** — measure the token cost of a runaway skills/agents catalog, trim it per-project, emit an interactive HTML recap, and fix the root cause.
+> A Claude Code skill that **audits and curates your skills catalog** — decide *what* belongs in the always-on catalog (real skills) and what doesn't (episodic lessons), apply the cut safely and reversibly, and **measure the result** with an interactive HTML recap. Claude Code now provides the trimming levers natively; this skill is the methodology for using them well.
 
 [![GitHub release](https://img.shields.io/github/v/release/wan-huiyan/context-police)](https://github.com/wan-huiyan/context-police/releases)
 [![license](https://img.shields.io/github/license/wan-huiyan/context-police)](LICENSE)
@@ -26,9 +26,9 @@
 
 Claude Code injects the **whole catalog of installed skills + agents into context on every turn** — and into **every subagent** you spin up. That's fine with a handful of skills. But if you run a [claudeception](https://github.com/anthropics/claude-code)-style learning loop that mints ~1 new skill per session, your `~/.claude/skills/` quietly balloons to **800+** entries... and *every single one* is force-loaded, forever, paid again on every fan-out.
 
-The bill (measured on a real ~925-skill catalog): **~248k tokens** of skill descriptions per full injection — **~24× over a 1% context budget**. Since **v2.1.105 (2026-04-13)** Claude Code *enforces* that 1% budget natively (`skillListingBudgetFraction`): it collapses the least-used descriptions to bare names rather than pay the full bill, so ~248k is the *opt-in ceiling*, not the silent default (see ["Claude Code now does part of this natively"](#-claude-code-now-does-part-of-this-natively-since-v21105) below). It's still re-read every turn and multiplied across concurrent subagents, and small-context agent types (like `claude-code-guide`) can even overflow on launch with *"Prompt is too long" at 0 tokens.*
+The bill (measured on a real ~925-skill catalog): **~248k tokens** of skill descriptions per full injection — **~24× over a 1% context budget**. As of **v2.1.105** (2026-04-13; verify against your install with `/doctor`) Claude Code *enforces* that 1% budget natively (`skillListingBudgetFraction`): it collapses the least-used descriptions to bare names rather than pay the full bill, so ~248k is the *opt-in ceiling*, not the silent default (see ["Claude Code now does part of this natively"](#-claude-code-now-does-part-of-this-natively-as-of-v21105) below). It's still re-read every turn and multiplied across concurrent subagents, and small-context agent types (like `claude-code-guide`) can even overflow on launch with *"Prompt is too long" at 0 tokens.*
 
-**context-police is the toolkit to handle it, honestly:**
+**context-police is the audit & curation toolkit for it.** The trimming levers themselves (`skillOverrides`, `disable-model-invocation`, the listing budget) are now native Claude Code features — the durable value here is deciding **what** to trim (episodic lessons vs real skills), applying it safely, and measuring the outcome:
 
 1. 📏 **Measure** the real per-turn / per-subagent cost (from the cached-prefix token floor).
 2. ✂️ **Trim** it — per-project with the verified `skillOverrides` lever, or globally with `disable-model-invocation: true` — **without deleting a single skill** (everything stays on disk + `/name`-invocable).
@@ -39,11 +39,11 @@ It's **allow-by-default** the whole way down: a skill is only ever hidden when i
 
 ---
 
-## 🆕 Claude Code now does part of this natively (since v2.1.105)
+## 🆕 Claude Code now does part of this natively (as of v2.1.105)
 
-Good news, not bad: **Claude Code shipped a native version of this skill's core thesis** — in **v2.1.105, released 2026-04-13**. Run `/doctor` and look at the **Skills** check to see it live. Two settings do the work:
+Good news, not bad: **Claude Code shipped a native version of this skill's core thesis** — in **v2.1.105 (released 2026-04-13)**. Version and defaults below are as of that release — **verify against your install with `/doctor`** (its **Skills** check shows the live values). Two settings do the work:
 
-| Setting | Default | What it does |
+| Setting | Default (as of v2.1.105) | What it does |
 |---|---|---|
 | `skillListingBudgetFraction` | `0.01` (1%) | Caps the catalog at ~1% of the context window. When it's over budget, the **least-used** skills' descriptions collapse to bare names — still `/name`- and model-invocable, Claude just can't see *why* to reach for them. |
 | `maxSkillDescriptionChars` | `1536` | Per-skill cap on the `description` text; anything longer is truncated. This is `/doctor`'s *"N descriptions exceed the per-entry cap"* line. |
@@ -64,7 +64,7 @@ The catalog-bloat **problem** and the curation **methodology** aren't Claude-spe
 
 | Harness | Native listing budget? | Per-skill disable (keep manually-invocable) | Sub-agent ×N? |
 |---|---|---|---|
-| **Claude Code** | ✅ `skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536 (`/doctor`) | `skillOverrides`, `disable-model-invocation` | yes |
+| **Claude Code** | ✅ `skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536 (defaults as of v2.1.105 — `/doctor` shows yours) | `skillOverrides`, `disable-model-invocation` | yes |
 | **Codex** | ✅ ~2% / 8 000-char cap (descriptions shorten, then omit-with-warning) | `allow_implicit_invocation:false` / `enabled=false` | yes |
 | **Cursor 2.4** | ❌ none documented | **`disable-model-invocation: true`** + `paths` glob | unverified |
 | **Copilot CLI** | ❌ none | `disable-model-invocation` / `user-invocable:false` + `/skills` | **no** (sub-agents inherit no skills) |
@@ -211,6 +211,17 @@ No overclaiming: the symptom fix (`skillOverrides`) is solid and reversible; the
 
 No third-party Python packages — the recap script is stdlib-only.
 
+### 🔁 Maintaining the plugin copy
+
+The skill ships twice: the repo root (`SKILL.md` + `scripts/`) is the **source of truth**, and `plugins/context-police/skills/context-police/` is a byte-identical copy for the plugin marketplace. Don't edit the plugin copy directly — edit the root, then sync:
+
+```bash
+scripts/dev/sync_plugin_copy.sh          # copy root SKILL.md + scripts/ into the plugin
+scripts/dev/sync_plugin_copy.sh --check  # verify only; exits non-zero on drift
+```
+
+CI (`npm test`, zero-dependency `node --test`) fails if the copies drift or the manifests disagree. `scripts/dev/` is dev tooling and is excluded from the plugin copy.
+
 <details>
 <summary><b>✅ Quality checklist — what this skill guarantees</b></summary>
 
@@ -220,6 +231,14 @@ No third-party Python packages — the recap script is stdlib-only.
 - The root-cause curation is gated on a **fixed-by-intent classifier** + an **independent re-rate of the hide-list** — the skill asks for both before any destructive sweep.
 - Tradeoffs (unmeasured global-hide premise, the tested-and-killed retrieval hook) are stated up front, not buried.
 </details>
+
+---
+
+## 🧰 Related tools
+
+- **[token-torch](https://github.com/wan-huiyan/token-torch)** — usage dashboard that **quantifies the savings this tool produces**: its "Catalog savings" panel reads the `disable-model-invocation` output directly.
+- **[memory-hygiene](https://github.com/wan-huiyan/memory-hygiene)** — the right **substrate for the episodic lessons** this tool evicts from the always-on catalog.
+- **[claude-ecosystem-hygiene](https://github.com/wan-huiyan/claude-ecosystem-hygiene)** — the **bundle** that distributes context-police alongside its sibling hygiene tools.
 
 ---
 
