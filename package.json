@@ -1,0 +1,9 @@
+{
+  "name": "context-police",
+  "private": true,
+  "description": "Dev harness for the context-police skill/plugin — zero-dependency node --test suite.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}
