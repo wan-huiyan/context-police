@@ -183,7 +183,39 @@ trigger phrases.
 
 > **Not a body-size check.** The body lazy-loads only when the skill fires; the description is resident every
 > turn. A 1,620-char description with a tiny body passes a body-size linter and fails here; the reverse also
-> holds. Independent checks — run both.
+> holds. Independent checks — run both. A body-size pass actively gives false comfort: on `agent-review-panel`
+> a schliff run (75→86) left the description at **1,501 chars — 35 under the cap**, and the next feature commit
+> pushed it to 2,004 with no complaint, because schliff does not measure descriptions.
+
+### Trimming safely — the measured procedure
+
+Detecting is the easy half. Trimming *trigger text* is where a careless fix does real damage. Validated
+end-to-end on `agent-review-panel` (2,703 → 1,505 chars, 25 dead triggers recovered):
+
+1. **Run `--triggers` first.** You aren't deciding *whether* to cut — the harness already cut. You're deciding
+   what survives.
+2. **Compress synonym runs; never delete concepts.** The model generalizes from `"cheap review"` to
+   `"frugal review"`; it cannot generalize from a phrase it never sees.
+3. **Cut prose, not trigger vocabulary.** Implementation detail belongs in the body.
+4. **Keep the NOT-for list** — that's precision, and it stops false firing.
+5. **Measure against `old[:cap-1]`**, what the model *actually saw* — not the full oversized source. The wrong
+   baseline makes every honest trim look like a regression.
+6. **Expect the first attempt to regress.** Measured first pass: **11 better / 18 same / 10 worse**. You'll
+   optimize the distinctive triggers and quietly drop natural-language phrases. Set-difference the word sets,
+   restore exactly what the regressed prompts need, re-cut. Second pass: **13 / 25 / 1**.
+7. **Track separation**, not just positive coverage — score the negative prompts too, so the trim doesn't buy
+   recall with false firing (`+26.0 → +32.0 pts`).
+8. **Leave ~30–50 chars of headroom.** Landing at cap−2 is one edit from breaking again.
+
+### Regression archaeology
+
+Walk the description length across git history to find the breach commit. On `agent-review-panel` that exposed
+the sharpest failure mode of all: **v3.7.1's entire stated purpose was "broaden budget-mode triggers for
+discoverability" — and all five phrases it added landed past the cut.** It shipped, was documented,
+changelogged, and delivered exactly nothing.
+
+> Adding triggers to an already-over-cap description isn't a no-op — it's a **silent** no-op that reads as a
+> feature. Check the cap *before* writing a discoverability release.
 
 In CI:
 
@@ -293,7 +325,10 @@ CI (`npm test`, zero-dependency `node --test`) fails if the copies drift or the 
 
 ## 📜 Version history
 
-- **v2.1.0** — **the publish-time description-cap gate** (`scripts/check_skill_descriptions.py`). Adds the upstream half: measure `description` + `whenToUse` against `skillListingMaxDescChars` (1536) and fail CI before an oversized description ships. The finding that motivated it: **truncation silently kills trigger phrases** — the harness keeps `full[:1535]` and drops the rest, so any `"…"` trigger past that position can never fire. Measured on a real 18-plugin install: 12 skills over cap, **30 trigger phrases invisible**, one skill having lost all 11 triggers for a fully-documented feature. `--triggers` names them, which makes a deliberate trim *verifiable* rather than a leap of faith. Also **corrects the setting's name throughout** — it is `skillListingMaxDescChars`, not `maxSkillDescriptionChars` (no `settings.json` key matches the latter; verified against the v2.1.221 binary).
+- **v2.1.0** — **the publish-time description-cap gate** (`scripts/check_skill_descriptions.py`) **+ the measured trimming procedure.** Adds the upstream half: measure `description` + `whenToUse` against `skillListingMaxDescChars` (1536) and fail CI before an oversized description ships. The finding that motivated it: **truncation silently kills trigger phrases** — the harness keeps `full[:1535]` and drops the rest, so any `"…"` trigger past that position can never fire. Measured on a real 18-plugin install: 12 skills over cap, **30 trigger phrases invisible**, one skill having lost all 11 triggers for a fully-documented feature. `--triggers` names them, making a deliberate trim *verifiable* rather than a leap of faith.
+  - **New: "Trimming an over-cap description SAFELY"** — the 9-step measured procedure, validated end-to-end on `agent-review-panel` (2,703 → 1,505 chars, 25 triggers recovered). Key results baked in: compress synonym runs rather than delete concepts; score against `old[:cap-1]` (what the model *actually saw*) and not the full source; **expect the first attempt to regress** (measured 11-better/18-same/**10-worse**, fixed to 13/25/1 by set-differencing the dropped words); track positive-vs-negative *separation*, not just recall.
+  - **New: regression archaeology** — walk the description length across git history to find the breach commit. On `agent-review-panel` this exposed the sharpest failure mode of the whole class: **a release whose entire purpose was "broaden triggers for discoverability" added five phrases that all landed past the cut.** Adding triggers to an over-cap description is a *silent* no-op that reads as a feature.
+  - Also **corrects the setting's name throughout** — it is `skillListingMaxDescChars`, not `maxSkillDescriptionChars` (no `settings.json` key matches the latter; verified against the v2.1.221 binary).
 - **v2.0.0** — **harness-agnostic reframe.** Led with the portable problem + curation methodology, demoted the Claude Code levers to a clearly-labeled *implementation* section, added a researched **cross-harness landscape** (Cursor / Codex / Copilot CLI / Gemini CLI — who has a native budget, who still needs manual curation; `disable-model-invocation` is part of the open standard and works verbatim on Cursor + Copilot CLI) and a **"porting to another harness"** recipe, and folded the retrieval-hook / 122k / forward-sweep work into a compact **History** footnote. Net: as a Claude-Code "fix the cost" tool the native budget made ~half of it redundant; reframed as *"manage skill-catalog cost in any auto-minting harness,"* its durable relevance is broader.
 - **v1.10.0** — **the `disable-model-invocation` dual-role + reverse-audit lesson.** The flag is *also* the **correct** config for a user slash-command (it stops the *model* auto-firing `/changelog`, `/lfg`, `/setup`… while keeping `/name`) — not just a trap-hide. So a reverse audit that flags "name-invoked → restore" is a **false-positive machine**: a full body-read audit of all 487 hidden skills flagged 17 "wrongly hidden," but on a deterministic `argument-hint`/`allowed-tools` check ~16 were correctly-configured commands (restoring them would let the model auto-fire commands *and* re-bloat the catalog). Genuine restores ≈ 1. Also: a conservative re-rated **forward** extension confirmed **0** new safe traps — post-budget the hide-sweep is largely played out; the remaining value is reading `/doctor` right, the per-project `off` lever, and *not over-hiding*. Added classification-rigor rules (intent-not-name, blind re-rate, deterministic-over-LLM).
 - **v1.9.0** — **Claude Code shipped the native catalog budget** (`skillListingBudgetFraction` 1% + `skillListingMaxDescChars` 1536, surfaced by `/doctor`) in **v2.1.105 (2026-04-13)** — ~7 weeks *before* this skill was first written; the original "docs-derived, not measured" note was about this exact mechanism, now verified. Documented it, made `/doctor` the canonical readout, flagged **raising the budget fraction as the anti-pattern** (its ~111k opt-in cost is consistent with — same ballpark as — the old ~122k estimate), and **corrected two now-false claims** — *"standalone skills inject as bare names"* and *"`name-only` is a blanket no-op"* — which only held before the budget made description-dropping usage-ranked.

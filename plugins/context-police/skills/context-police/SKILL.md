@@ -194,7 +194,49 @@ phrases while still being fully documented in the body.
 
 **Not the same check as SKILL.md body size.** The body lazy-loads only when the skill fires; the description is
 resident every turn. A 1,620-char description with a tiny body passes a body-size linter and fails here; the
-reverse also holds. The two are independent — run both.
+reverse also holds. The two are independent — run both. Worse, a body-size pass gives false comfort: on
+`agent-review-panel` a schliff quality pass (75→86) left the description at **1,501 chars — 35 under the cap**;
+the very next feature commit pushed it to 2,004 and schliff never complained, because it does not measure
+descriptions.
+
+## Trimming an over-cap description SAFELY (the verified procedure)
+Detecting the problem is the easy half. Trimming trigger text is where a careless fix does real damage, so
+this is a measured procedure, not a style guide. Validated end-to-end on `agent-review-panel` (2,703 → 1,505
+chars, 25 dead triggers recovered).
+
+1. **Run `--triggers` BEFORE touching anything.** You are not deciding whether to cut; the harness already cut.
+   You are deciding what survives. Know what is currently dead first.
+2. **Compress synonym runs; never delete concepts.** The model generalizes from `"cheap review"` to
+   `"frugal review"` — it cannot generalize from a phrase it never sees. Ten literal synonyms for one concept
+   is waste; two or three representatives carry it. Every *distinct* concept stays.
+3. **Cut prose, not trigger vocabulary.** Implementation detail ("3 sonnet reviewers, one debate round, opus
+   judge") belongs in the body. The description's only job is to make the model reach for the skill.
+4. **Keep the NOT-for list.** It is precision — it is what stops false firing.
+5. **Measure against the right baseline.** Score each known trigger prompt (an `eval-suite.json`, or the
+   skill's own trigger list) by word overlap against **`old[:cap-1]`** — what the model *actually saw* — not
+   against the full oversized source. Using the full source as baseline includes text the model never read and
+   makes every honest trim look like a regression.
+6. **Expect the first attempt to regress, and check.** The measured first pass on `agent-review-panel` scored
+   **11 better / 18 same / 10 WORSE**. The failure mode is predictable: you optimize the distinctive mode
+   triggers and quietly drop natural-language phrases like `"critical look from security and performance
+   angles"`. Diagnose mechanically — set-difference the word sets, count how many prompts each dropped word
+   serves, restore exactly those, re-cut. Second pass: **13 / 25 / 1**.
+7. **Track SEPARATION, not just positive coverage.** Score the negative prompts too. A trim that lifts positive
+   coverage by adding generic words also lifts false firing. Report `positive_mean − negative_mean` before and
+   after; it must widen or hold (`agent-review-panel`: +26.0 → +32.0 pts).
+8. **Leave headroom (~30–50 chars).** A trim landing at cap−2 is one edit from breaking again.
+9. **Preserve the file's YAML scalar style** (`>` folded / `|` block / plain) and re-wrap consistently.
+
+**Regression archaeology — find WHEN the cap broke.** Walk the description length across history; the breach
+commit is usually a feature that appended triggers without checking:
+```bash
+git log --format='%H %s' --reverse   # extract the description at each commit, flag the first over the cap
+```
+On `agent-review-panel` this exposed the sharpest failure mode of all: the breach was v2.14, and **v3.7.1 — a
+release whose entire stated purpose was "broaden budget-mode triggers for discoverability" — added five phrases
+that ALL landed past the cut.** It shipped, was documented, changelogged, and delivered exactly nothing.
+*Adding triggers to an already-over-cap description is not a no-op; it is a silent no-op that reads as a
+feature.* Check the cap before writing a discoverability release.
 
 ## Optional: interactive recap report (`scripts/render_treatment_report.py`)
 After a treatment, render a self-contained, interactive HTML recap (reads `.claude/settings.json` + the skills dir,
