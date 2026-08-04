@@ -4,21 +4,20 @@ description: |
   Use when an agent harness's skills/tools catalog has grown large (hundreds+, e.g. from an auto-skill-minting
   loop) and is taxing context: the listing of skill names+descriptions is injected every turn AND into every
   subagent, so cost multiplies on fan-out and small-context agents can overflow ("Prompt is too long" at 0
-  tokens). This skill is the AUDIT + CURATION methodology plus measurement/reporting: the trimming levers are
-  now native harness features (Claude Code ships them built in) — the durable value is deciding WHAT to trim
-  (episodic lessons vs real skills), applying it safely, and measuring the result. The PROBLEM + curation
-  METHODOLOGY are harness-agnostic — the Agent Skills open standard (agentskills.io) is shared by Claude Code,
-  Cursor, Codex, Copilot CLI, Gemini CLI; only the levers differ.
-  Covers: the portable diagnosis + classification rigor (curate by INTENT not name, conservative asymmetry,
-  blind re-rate, deterministic checks over LLM votes); the cross-harness landscape (native budget on Claude
-  Code + Codex vs manual curation on Cursor/Copilot CLI/Gemini CLI); the Claude Code levers (`skillOverrides`,
-  `disable-model-invocation`, the native `skillListingBudgetFraction`/`maxSkillDescriptionChars` budget read via
-  `/doctor`, and the anti-pattern of raising the fraction); the `disable-model-invocation` DUAL-ROLE footgun
-  (also the correct setting for a user slash-command — so a "name-invoked → restore" audit is a false-positive
-  machine); plus a history footnote (a retrieval-hook replacement was tested to ground and KILLED by a base-rate
-  wall; the forward hide-sweep is largely played out post-budget).
+  tokens). Also use when one skill's description exceeds the per-skill cap — the harness truncates it mid-word
+  and every trigger phrase past the cut goes silently dead. This skill is the AUDIT + CURATION methodology,
+  measurement/reporting, and a publish-time description gate: the trimming levers are now native harness
+  features, so the durable value is deciding WHAT to trim (episodic lessons vs real skills), applying it
+  safely, and measuring the result. The PROBLEM + METHODOLOGY are harness-agnostic — the Agent Skills standard
+  (agentskills.io) is shared by Claude Code, Cursor, Codex, Copilot CLI, Gemini CLI; only the levers differ.
+  Covers: classification rigor (curate by INTENT not name, conservative asymmetry, blind re-rate); the
+  cross-harness landscape; the Claude Code levers (`skillOverrides`, `disable-model-invocation`, the native
+  `skillListingBudgetFraction`/`skillListingMaxDescChars` budget read via `/doctor`, and the anti-pattern of
+  raising the fraction); the per-skill description cap and the triggers truncation destroys; and the
+  `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
+  "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.0.0
+version: 2.1.0
 date: 2026-06-17
 ---
 
@@ -60,7 +59,7 @@ The levers further down are platform-specific; **these ideas are not** — they'
 ## Cross-harness landscape (researched 2026-06-17; all adopt the Agent Skills standard, agentskills.io)
 | Harness | Always-on listing? | Native budget / truncation? | Per-skill disable (keep manually-invocable) | Per-subagent ×N? |
 |---|---|---|---|---|
-| **Claude Code** | yes | **YES** — `skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536 (shipped v2.1.105, 2026-04-13; defaults as of then — `/doctor` shows your install's live values) | `skillOverrides` (per-project), `disable-model-invocation` (global) | **yes** (whole catalog into every subagent) |
+| **Claude Code** | yes | **YES** — `skillListingBudgetFraction` 1% + `skillListingMaxDescChars` 1536 (shipped v2.1.105, 2026-04-13; defaults as of then — `/doctor` shows your install's live values) | `skillOverrides` (per-project), `disable-model-invocation` (global) | **yes** (whole catalog into every subagent) |
 | **Codex** | yes (name+desc+path at session start) | **YES** — ~2% / 8000-char cap; descriptions shorten then omit-with-warning; desc cap 1024 | `allow_implicit_invocation:false` / `enabled=false` | **yes** (subagents cost more; recommend a mini child model) |
 | **Cursor 2.4** | descriptions model-visible; `alwaysApply:true` rules inject full body every turn | **no** documented budget (soft "<500 lines" guidance) | **`disable-model-invocation: true`** (→ slash-only) + `paths` glob | subagents exist; ×N unverified |
 | **Copilot CLI** | name+desc index always-on; bodies lazy | **no** | `disable-model-invocation` / `user-invocable:false` + `/skills` toggle | **no** — sub-agents inherit no skills |
@@ -97,8 +96,11 @@ public docs as of the research date — confirm before relying.)*
    - **`skillListingBudgetFraction`** (default `0.01` = 1%): when the listing exceeds 1% of context, the
      **least-used** skills' descriptions collapse to bare names (still `/name`- and model-invocable; the model just
      can't see *why*). Usage-ranked auto-curation, every session.
-   - **`maxSkillDescriptionChars`** (default `1536`): per-skill cap on `description`+`when_to_use`; longer is
-     **truncated** (independent of the budget). Keep your OWN skills' descriptions ≤1536.
+   - **`skillListingMaxDescChars`** (default `1536`): per-skill cap on `description`+`whenToUse` (the harness
+     joins them with `" - "` and caps the pair); longer is **truncated** (independent of the budget). Keep your
+     OWN skills' descriptions ≤1536 — enforce it with `scripts/check_skill_descriptions.py` (below).
+     *(The setting is `skillListingMaxDescChars`; earlier revisions of this skill called it
+     `maxSkillDescriptionChars`, which no `settings.json` key matches. Verified against the v2.1.221 binary.)*
    - `/doctor`'s **Skills ⚠** check prints `N descriptions will be dropped (X%/1% of context)`, the per-entry-cap
      offenders, and the token cost of opting in. It is the canonical readout — re-run it after any change.
    - **THE ANTI-PATTERN: do NOT raise `skillListingBudgetFraction` to silence `/doctor`.** The 1% default *is*
@@ -165,6 +167,34 @@ relevant to *this* project; a missed cut is just unrealized savings. Method (≈
    (keep ON anything ANY reviewer flags) — false-hide is the only harm, so union-not-intersection is correct.
 4. **Final guard:** scan the OFF-set for protect-marker substrings, eyeball the hits. Keep the generator + review
    JSON + a decision record for provenance and easy revert.
+
+## The publish-time gate: per-skill description cap (`scripts/check_skill_descriptions.py`)
+Everything above curates a catalog you INHERITED. This is the upstream half — stop an oversized description
+from shipping in the first place. Zero-dependency, exit 1 on violation, drop it in CI.
+```bash
+python3 scripts/check_skill_descriptions.py .              # gate a skill repo
+python3 scripts/check_skill_descriptions.py . --triggers   # what truncation is destroying
+python3 scripts/check_skill_descriptions.py . --context 1000000 --json
+```
+
+**Why the cap matters more than the token cost.** Going over does not cost tokens — the budget is a hard cap.
+It costs *descriptions*, and truncation is **not** intelligent: the harness keeps `full[:1535]` and appends an
+ellipsis. A description is trigger text, so every `when the user says "…"` phrase living past that character
+position is **already dead** — the skill will not fire on it and nothing reports the loss.
+
+**This inverts the safety question for trimming.** The instinct is "if I cut the description, will the skill
+still work?" But an over-cap description is already cut; the only question is whether YOU choose what survives
+or the harness chooses by character position. `--triggers` lists the quoted phrases past the cut, so a
+deliberate trim is verifiable: re-run until that section is empty.
+
+Measured on a real 18-plugin install (2026-08-04): **12 skills over cap, 30 trigger phrases invisible.** One
+skill had lost all 11 triggers for an entire documented feature — `"budget mode"`, `"cheap review"`,
+`"token-efficient review"` and the rest — so the feature could not be invoked by any of its own trigger
+phrases while still being fully documented in the body.
+
+**Not the same check as SKILL.md body size.** The body lazy-loads only when the skill fires; the description is
+resident every turn. A 1,620-char description with a tiny body passes a body-size linter and fails here; the
+reverse also holds. The two are independent — run both.
 
 ## Optional: interactive recap report (`scripts/render_treatment_report.py`)
 After a treatment, render a self-contained, interactive HTML recap (reads `.claude/settings.json` + the skills dir,

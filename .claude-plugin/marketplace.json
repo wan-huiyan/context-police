@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "wan-huiyan-context-police",
-  "description": "context-police \u2014 measure, trim, and report the runaway-skills-catalog token tax in Claude Code.",
+  "description": "context-police — measure, trim, and report the runaway-skills-catalog token tax in Claude Code.",
   "owner": {
     "name": "Huiyan Wan"
   },
@@ -9,8 +9,8 @@
     {
       "name": "context-police",
       "source": "./plugins/context-police",
-      "description": "Patrol the context budget: measure the skills/agents catalog cost (now surfaced natively by /doctor), trim it per-project (skillOverrides) or globally (disable-model-invocation), emit an interactive HTML recap, and curate episodic lessons out of the always-on catalog by description intent.",
-      "version": "2.0.0"
+      "description": "Patrol the context budget: measure the skills/agents catalog cost (now surfaced natively by /doctor), trim it per-project (skillOverrides) or globally (disable-model-invocation), gate per-skill description length at publish time so truncation stops silently killing trigger phrases, emit an interactive HTML recap, and curate episodic lessons out of the always-on catalog by description intent.",
+      "version": "2.1.0"
     }
   ]
 }

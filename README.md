@@ -46,7 +46,7 @@ Good news, not bad: **Claude Code shipped a native version of this skill's core 
 | Setting | Default (as of v2.1.105) | What it does |
 |---|---|---|
 | `skillListingBudgetFraction` | `0.01` (1%) | Caps the catalog at ~1% of the context window. When it's over budget, the **least-used** skills' descriptions collapse to bare names — still `/name`- and model-invocable, Claude just can't see *why* to reach for them. |
-| `maxSkillDescriptionChars` | `1536` | Per-skill cap on the `description` text; anything longer is truncated. This is `/doctor`'s *"N descriptions exceed the per-entry cap"* line. |
+| `skillListingMaxDescChars` | `1536` | Per-skill cap on `description` + `whenToUse` (joined with `" - "`); anything longer is truncated **mid-word**, silently killing any trigger phrase past the cut. This is `/doctor`'s *"N descriptions exceed the per-entry cap"* line — gate it at publish time with [`check_skill_descriptions.py`](#-the-description-cap-gate). |
 
 So `/doctor` now tells you something like *"563 skill descriptions will be dropped (10.8%/1% of context)… opting in would cost ~111k tokens every session."* Read it right:
 
@@ -64,7 +64,7 @@ The catalog-bloat **problem** and the curation **methodology** aren't Claude-spe
 
 | Harness | Native listing budget? | Per-skill disable (keep manually-invocable) | Sub-agent ×N? |
 |---|---|---|---|
-| **Claude Code** | ✅ `skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536 (defaults as of v2.1.105 — `/doctor` shows yours) | `skillOverrides`, `disable-model-invocation` | yes |
+| **Claude Code** | ✅ `skillListingBudgetFraction` 1% + `skillListingMaxDescChars` 1536 (defaults as of v2.1.105 — `/doctor` shows yours) | `skillOverrides`, `disable-model-invocation` | yes |
 | **Codex** | ✅ ~2% / 8 000-char cap (descriptions shorten, then omit-with-warning) | `allow_implicit_invocation:false` / `enabled=false` | yes |
 | **Cursor 2.4** | ❌ none documented | **`disable-model-invocation: true`** + `paths` glob | unverified |
 | **Copilot CLI** | ❌ none | `disable-model-invocation` / `user-invocable:false` + `/skills` | **no** (sub-agents inherit no skills) |
@@ -149,8 +149,49 @@ The "Without" column isn't a strawman — `enabledPlugins` per-project and bulk-
   - `disable-model-invocation: true` (SKILL.md frontmatter) — the verified **global** lever: drops a skill's *name* from the catalog (reclaims the full per-skill cost) while keeping it `/name`-invocable + `rg`-reachable.
   - Two corrections to the naive plan: `"name-only"` only reclaims tokens for a skill the native budget is *still showing with a description* (a most-used one) — the least-used tail is already collapsed to bare names, so for them it's a **no-op**; only `"off"` reclaims the *name*. And `find-skills`/`search-skill` search **external** marketplaces only — they do **not** re-surface your hidden local skills.
 - **A safe wide-denylist method** (the conservative cut → ~48%): anchored `startswith` matching (never substring — `"ml-"` would eat `html-...`), an explicit PROTECT allowlist for your real stack, a review-panel vetting that keeps **ON** anything *any* reviewer flags (union, not intersection — because a wrongly-hidden relevant skill is the only harm).
+- **A publish-time description-cap gate** (`scripts/check_skill_descriptions.py`) — the upstream half: stop an oversized description from shipping at all. Zero-dependency, exit 1 on violation, drop it in CI. See below.
 - **An interactive HTML recap** (`scripts/render_treatment_report.py`) — arcade-styled, self-contained, opens from `file://`, with clickable tiles → a searchable explorer of every skill by decision (off / on / kept / added / override + reason).
 - **The durable root-cause analysis** — why the bloat is a knowledge base in the wrong substrate, the *two distinct strategies* that follow (curation vs retrieval-hook-replacement), and the measured reason only one of them works.
+
+---
+
+## 🚧 The description-cap gate
+
+Everything else here curates a catalog you **inherited**. This is the upstream half — keep an oversized
+description from shipping in the first place.
+
+```bash
+python3 scripts/check_skill_descriptions.py .              # gate a skill repo (exit 1 on violation)
+python3 scripts/check_skill_descriptions.py . --triggers   # what truncation is destroying
+python3 scripts/check_skill_descriptions.py . --context 1000000 --json
+```
+
+**Going over the cap doesn't cost tokens — the budget is a hard cap. It costs *descriptions*.** And truncation
+isn't intelligent: the harness keeps `full[:1535]` and appends an ellipsis. A description **is** trigger text,
+so every `when the user says "…"` phrase past that character position is **already dead** — the skill won't
+fire on it, and nothing reports the loss.
+
+That inverts the usual worry. The instinct is *"if I trim the description, will the skill still work?"* — but
+an over-cap description is **already trimmed**. The only question is whether *you* choose what survives, or the
+harness chooses by character position. `--triggers` lists the phrases past the cut, so a deliberate trim is
+verifiable: re-run until that section is empty.
+
+Measured on a real 18-plugin install (2026-08-04): **12 skills over cap, 30 trigger phrases invisible.** One
+skill had lost all 11 triggers for an entire documented feature — `"budget mode"`, `"cheap review"`,
+`"token-efficient review"` and the rest — so a fully-documented feature couldn't be invoked by any of its own
+trigger phrases.
+
+> **Not a body-size check.** The body lazy-loads only when the skill fires; the description is resident every
+> turn. A 1,620-char description with a tiny body passes a body-size linter and fails here; the reverse also
+> holds. Independent checks — run both.
+
+In CI:
+
+```yaml
+- run: python3 scripts/check_skill_descriptions.py . --no-color
+```
+
+Exit `0` clean · `1` over cap · `2` bad path (so a typo fails loudly instead of passing as a no-op).
 
 ---
 
@@ -252,9 +293,10 @@ CI (`npm test`, zero-dependency `node --test`) fails if the copies drift or the 
 
 ## 📜 Version history
 
+- **v2.1.0** — **the publish-time description-cap gate** (`scripts/check_skill_descriptions.py`). Adds the upstream half: measure `description` + `whenToUse` against `skillListingMaxDescChars` (1536) and fail CI before an oversized description ships. The finding that motivated it: **truncation silently kills trigger phrases** — the harness keeps `full[:1535]` and drops the rest, so any `"…"` trigger past that position can never fire. Measured on a real 18-plugin install: 12 skills over cap, **30 trigger phrases invisible**, one skill having lost all 11 triggers for a fully-documented feature. `--triggers` names them, which makes a deliberate trim *verifiable* rather than a leap of faith. Also **corrects the setting's name throughout** — it is `skillListingMaxDescChars`, not `maxSkillDescriptionChars` (no `settings.json` key matches the latter; verified against the v2.1.221 binary).
 - **v2.0.0** — **harness-agnostic reframe.** Led with the portable problem + curation methodology, demoted the Claude Code levers to a clearly-labeled *implementation* section, added a researched **cross-harness landscape** (Cursor / Codex / Copilot CLI / Gemini CLI — who has a native budget, who still needs manual curation; `disable-model-invocation` is part of the open standard and works verbatim on Cursor + Copilot CLI) and a **"porting to another harness"** recipe, and folded the retrieval-hook / 122k / forward-sweep work into a compact **History** footnote. Net: as a Claude-Code "fix the cost" tool the native budget made ~half of it redundant; reframed as *"manage skill-catalog cost in any auto-minting harness,"* its durable relevance is broader.
 - **v1.10.0** — **the `disable-model-invocation` dual-role + reverse-audit lesson.** The flag is *also* the **correct** config for a user slash-command (it stops the *model* auto-firing `/changelog`, `/lfg`, `/setup`… while keeping `/name`) — not just a trap-hide. So a reverse audit that flags "name-invoked → restore" is a **false-positive machine**: a full body-read audit of all 487 hidden skills flagged 17 "wrongly hidden," but on a deterministic `argument-hint`/`allowed-tools` check ~16 were correctly-configured commands (restoring them would let the model auto-fire commands *and* re-bloat the catalog). Genuine restores ≈ 1. Also: a conservative re-rated **forward** extension confirmed **0** new safe traps — post-budget the hide-sweep is largely played out; the remaining value is reading `/doctor` right, the per-project `off` lever, and *not over-hiding*. Added classification-rigor rules (intent-not-name, blind re-rate, deterministic-over-LLM).
-- **v1.9.0** — **Claude Code shipped the native catalog budget** (`skillListingBudgetFraction` 1% + `maxSkillDescriptionChars` 1536, surfaced by `/doctor`) in **v2.1.105 (2026-04-13)** — ~7 weeks *before* this skill was first written; the original "docs-derived, not measured" note was about this exact mechanism, now verified. Documented it, made `/doctor` the canonical readout, flagged **raising the budget fraction as the anti-pattern** (its ~111k opt-in cost is consistent with — same ballpark as — the old ~122k estimate), and **corrected two now-false claims** — *"standalone skills inject as bare names"* and *"`name-only` is a blanket no-op"* — which only held before the budget made description-dropping usage-ranked.
+- **v1.9.0** — **Claude Code shipped the native catalog budget** (`skillListingBudgetFraction` 1% + `skillListingMaxDescChars` 1536, surfaced by `/doctor`) in **v2.1.105 (2026-04-13)** — ~7 weeks *before* this skill was first written; the original "docs-derived, not measured" note was about this exact mechanism, now verified. Documented it, made `/doctor` the canonical readout, flagged **raising the budget fraction as the anti-pattern** (its ~111k opt-in cost is consistent with — same ballpark as — the old ~122k estimate), and **corrected two now-false claims** — *"standalone skills inject as bare names"* and *"`name-only` is a blanket no-op"* — which only held before the budget made description-dropping usage-ranked.
 - **v1.7.0** — the root-cause work resolved: curation works, the retrieval-hook replacement doesn't.
   - **Separated the two strategies** (curation vs retrieval-hook-replacement) and fixed the trap/procedure classifier to triage by **description intent**, not hyphen count (171/886 mislabeled).
   - **Proved the keyword hook can't replace force-load** across five gate families — a **base-rate wall** (genuine-trap moments ~0.1% of triggers), precision-when-firing <0.3%. **Embeddings then tested and fail identically** (~23% recall @ ~99% firing). Shadow hook removed.
