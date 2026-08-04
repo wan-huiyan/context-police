@@ -111,3 +111,55 @@ test('--json reports counts and validates as JSON', () => {
     assert.equal(parsed.cap, CAP);
   } finally { cleanup(); }
 });
+
+test('a hyphen wrapped across folded-scalar lines is caught', () => {
+  // `description: >` joins lines with a SPACE and textwrap.wrap() breaks on hyphens by
+  // default, so a machine re-wrap silently injects "token- efficient review". The char
+  // count is unchanged, so only a structural check can see it.
+  const dir = mkdtempSync(join(tmpdir(), 'cp-wrap-'));
+  const skillDir = join(dir, 'wrapped');
+  mkdirSync(skillDir);
+  writeFileSync(join(skillDir, 'SKILL.md'),
+    '---\nname: wrapped\ndescription: >\n  Use when the user asks for a token-\n' +
+    '  efficient review of the thing.\n---\n\nbody\n');
+  try {
+    const r = run([dir]);
+    assert.equal(r.status, 1, 'a mid-token wrap must fail the gate');
+    assert.match(r.stdout, /BROKEN BY LINE-WRAP/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a clean hyphenated description is not flagged', () => {
+  // Guard against the wrap check firing on legitimate end-of-line hyphens.
+  const { dir, cleanup } = withSkill(
+    'name: clean\ndescription: >\n  Use for a token-efficient review.\n  Second line here.');
+  try {
+    assert.equal(run([dir]).status, 0);
+  } finally { cleanup(); }
+});
+
+test('the dead tail is counted from cap-1, not cap', () => {
+  // The harness keeps full[:cap-1] + an ellipsis, so an over-cap description loses
+  // desc - (cap-1) chars. Reporting desc - cap undercounts every offender by one.
+  const { dir, cleanup } = withSkill(`name: tail\ndescription: ${'x'.repeat(CAP + 100)}`);
+  try {
+    const r = run([dir, '--json']);
+    const s = JSON.parse(r.stdout).skills.find((x) => x.name === 'tail');
+    assert.equal(s.desc_chars, CAP + 100);
+    // 100 over the cap means 101 characters past the truncation point.
+    assert.match(r.stdout, /"over": true/);
+  } finally { cleanup(); }
+});
+
+test('--compare flags a trigger narrowed by a new precondition', () => {
+  // Word-overlap scoring is blind to this: the word set is identical.
+  const dir = mkdtempSync(join(tmpdir(), 'cp-cmp-'));
+  const a = join(dir, 'a.md'), b = join(dir, 'b.md');
+  writeFileSync(a, '---\nname: s\ndescription: >\n  Use when "verifying a claim" -- and separately, if the SQL has no join.\n---\n\nx\n');
+  writeFileSync(b, '---\nname: s\ndescription: >\n  Use when "verifying a claim" whose SQL has no join.\n---\n\nx\n');
+  try {
+    const r = spawnSync('python3', [gate, '--compare', a, b, '--no-color'], { encoding: 'utf8' });
+    assert.equal(r.status, 1, 'a narrowed trigger must be reported');
+    assert.match(r.stdout, /NARROWED/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

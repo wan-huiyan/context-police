@@ -17,7 +17,7 @@ description: |
   `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
   "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.1.0
+version: 2.2.0
 date: 2026-06-17
 ---
 
@@ -225,7 +225,45 @@ chars, 25 dead triggers recovered).
    coverage by adding generic words also lifts false firing. Report `positive_mean − negative_mean` before and
    after; it must widen or hold (`agent-review-panel`: +26.0 → +32.0 pts).
 8. **Leave headroom (~30–50 chars).** A trim landing at cap−2 is one edit from breaking again.
-9. **Preserve the file's YAML scalar style** (`>` folded / `|` block / plain) and re-wrap consistently.
+9. **Preserve the file's YAML scalar style** (`>` folded / `|` block / plain), and **re-wrap with
+   `break_on_hyphens=False`.** See the corruption trap below — this one bit the reference fix itself.
+10. **Commit the scoring harness.** A PR that cites coverage numbers from an uncommitted scratch
+    script is asking a reviewer to take them on faith. Keep the stopword list small and inline: a
+    large one is a free parameter that can be tuned until the numbers look good.
+
+### The line-wrap corruption trap (silent, and no length check can see it)
+A `>` folded or `|` block scalar joins its lines with a **space** — and Python's `textwrap.wrap()`
+breaks on hyphens **by default**. Re-wrapping a description therefore splits hyphenated tokens
+across lines, and the harness injects them broken:
+```
+"high- stakes"              was "high-stakes"
+"token- efficient review"   was "token-efficient review"
+```
+Both were *trigger phrases in the very fix that was restoring triggers.* The character count is
+identical, so a cap check passes and a coverage score barely moves. `check_skill_descriptions.py`
+now flags any folded-scalar line ending in a hyphen followed by an alphanumeric (`BROKEN BY
+LINE-WRAP`) and fails the gate on it. Independently observed in two different repos this session —
+assume it is present wherever descriptions have been machine-wrapped.
+
+### Word-overlap scoring has a blind spot; `--compare` covers it
+Bag-of-words coverage cannot see **trigger-condition restructuring**. Rewriting
+`trigger on X — separately, watch for Y` into `trigger on X WHOSE Y` preserves the identical word
+set, so any overlap metric scores it **identically** — while the trigger now only fires for users
+who have *already diagnosed* Y. That is a narrowed trigger surface passing a green metric.
+```bash
+python3 scripts/check_skill_descriptions.py --compare main:path/SKILL.md path/SKILL.md
+```
+Pairs each trigger old→new (fuzzy, so a rephrasing does not read as drop+add) and reports
+`DROPPED` / `NARROWED` / `REWORDED` / `REPHRASED`. **`NARROWED` and `REWORDED` need a human read —
+do not clear them with a coverage number.**
+
+### The cap is necessary, NOT sufficient — do not overclaim
+Two independent limits gate a description. Getting under `skillListingMaxDescChars` only means it
+is *no longer truncated*; `skillListingBudgetFraction` can still collapse it to a bare name because
+the whole listing is over budget, and that collapse is **usage-ranked**, not length-ranked. On a
+real 18-plugin install only ~41% of descriptions survive the budget at 1M context. So "restored N
+triggers" is honest only as *"no longer truncated"* — never as *"guaranteed visible"*. State both
+limits, or the headline claim is contingent on a fact the PR never checked.
 
 **Regression archaeology — find WHEN the cap broke.** Walk the description length across history; the breach
 commit is usually a feature that appended triggers without checking:
