@@ -163,3 +163,24 @@ test('--compare flags a trigger narrowed by a new precondition', () => {
     assert.match(r.stdout, /NARROWED/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('a chomping indicator (>-) does not produce a bogus wrap hit', () => {
+  // Regression: matching the block header only as far as `>` leaves the chomping
+  // character behind as a phantom one-character line "-", which then trips the
+  // hyphen test and fails CI on a perfectly clean skill. `description: >-` is common.
+  const { dir, cleanup } = withSkill(
+    'name: chomped\ndescription: >-\n  Use when the user asks for an ordinary thing.\nother: value');
+  try {
+    assert.equal(run([dir]).status, 0, 'a clean >- description must not be flagged');
+  } finally { cleanup(); }
+});
+
+test('the wrap scan stops at the end of the block body', () => {
+  // Running past the block into the next frontmatter key would let an unrelated
+  // trailing-hyphen line masquerade as description corruption.
+  const { dir, cleanup } = withSkill(
+    'name: bounded\ndescription: >-\n  A clean description here.\nauthor: some-\nversion: 1.0.0');
+  try {
+    assert.equal(run([dir]).status, 0, 'a hyphen outside the description must be ignored');
+  } finally { cleanup(); }
+});

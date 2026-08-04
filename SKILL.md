@@ -17,7 +17,7 @@ description: |
   `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
   "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.2.0
+version: 2.2.1
 date: 2026-06-17
 ---
 

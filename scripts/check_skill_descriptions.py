@@ -212,10 +212,21 @@ def find_wrap_corruption(fm: str) -> list[str]:
     length check can see it because the char count is unchanged.
     """
     hits = []
-    m = re.search(r"^(description|whenToUse|when_to_use):\s*([|>])", fm, re.M)
+    # Match the WHOLE block header, including any chomping (`>-`, `|+`) or explicit-indent
+    # (`|2`) indicator. Stopping the match at the `|`/`>` leaves the chomping character
+    # behind as a phantom one-character line `-`, which then trips the hyphen test below
+    # and reports a bogus hit on every skill written with the very common `description: >-`.
+    m = re.search(r"^(description|whenToUse|when_to_use):[ \t]*[|>][-+]?\d*[ \t]*$", fm, re.M)
     if not m:
         return hits
-    lines = [l for l in fm[m.end():].splitlines() if l.strip()]
+    # Stay inside the block body: stop at the first non-indented line, which is the next key.
+    body = []
+    for line in fm[m.end():].splitlines():
+        if line.strip() and not line[:1].isspace():
+            break
+        if line.strip():
+            body.append(line)
+    lines = body
     for i, line in enumerate(lines[:-1]):
         stripped = line.strip()
         if not stripped.endswith("-"):
