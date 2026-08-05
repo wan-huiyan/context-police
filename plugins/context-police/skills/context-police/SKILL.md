@@ -17,7 +17,7 @@ description: |
   `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
   "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.2.2
+version: 2.3.0
 date: 2026-06-17
 ---
 
@@ -220,16 +220,73 @@ chars, 25 dead triggers recovered).
    **11 better / 18 same / 10 WORSE**. The failure mode is predictable: you optimize the distinctive mode
    triggers and quietly drop natural-language phrases like `"critical look from security and performance
    angles"`. Diagnose mechanically — set-difference the word sets, count how many prompts each dropped word
-   serves, restore exactly those, re-cut. Second pass: **13 / 25 / 1**.
+   serves, restore exactly those, re-cut. The shipped second pass measures **12 better / 27 same / 0 worse**
+   against the committed harness. (The first-pass figure is from an intermediate state that was never
+   committed and does not reproduce; the second-pass one does.)
 7. **Track SEPARATION, not just positive coverage.** Score the negative prompts too. A trim that lifts positive
    coverage by adding generic words also lifts false firing. Report `positive_mean − negative_mean` before and
-   after; it must widen or hold (`agent-review-panel`: +26.0 → +32.0 pts).
+   after; it must widen or hold (`agent-review-panel`: **+0.2605 → +0.3183**).
 8. **Leave headroom (~30–50 chars).** A trim landing at cap−2 is one edit from breaking again.
 9. **Preserve the file's YAML scalar style** (`>` folded / `|` block / plain), and **re-wrap with
    `break_on_hyphens=False`.** See the corruption trap below — this one bit the reference fix itself.
-10. **Commit the scoring harness.** A PR that cites coverage numbers from an uncommitted scratch
-    script is asking a reviewer to take them on faith. Keep the stopword list small and inline: a
-    large one is a free parameter that can be tuned until the numbers look good.
+10. **Commit the scoring harness, and pin its refs to COMMITS.** A PR that cites coverage numbers
+    from an uncommitted scratch script is asking a reviewer to take them on faith. Keep the
+    stopword list small and inline: a large one is a free parameter that can be tuned until the
+    numbers look good. And write `--old <sha>:path --new <sha>:path`, never `--old main:path` —
+    that is correct only while the trim is unmerged. Once it lands, `main` *becomes* the post-trim
+    state and the same command prints `0.5198 → 0.5198`, a table of zero deltas that reads as
+    though it refutes the table above it. This happened to `claude-ecosystem-hygiene`.
+
+11. **`--compare` only sees DOUBLE-QUOTED spans.** `extract_triggers()` matches `"..."` and
+    `“...”` and nothing else, so **backticked literals are invisible to it** — error strings,
+    flags, file paths. An empty `DROPPED` table is not proof that no trigger was lost.
+    `publish-skill`'s own 2,385 → 1,503 trim silently removed three backticked error literals and
+    `--compare` reported 0 dropped. Diff the backticked spans of the **description** by hand too
+    (a whole-file diff finds nothing, because the body usually still carries them):
+    ```bash
+    desclit() { python3 -c '
+    import re,sys
+    t=open(sys.argv[1]).read() if len(sys.argv)>1 else sys.stdin.read()
+    fm=re.match(r"^---\n([\s\S]*?)\n---",t).group(1)
+    d=re.search(r"(?m)^description:\s*[|>]-?\s*\n((?:[ \t]+.*\n?)*)",fm).group(1)
+    d=" ".join(l.strip() for l in d.split("\n") if l.strip())
+    print("\n".join(sorted(set(re.findall(r"`([^`\n]{3,90})`",d)))))
+    ' "$@"; }
+
+    diff <(git show main:<path/SKILL.md> | desclit) <(desclit <path/SKILL.md>)
+    ```
+
+### If you vendor this gate, pin a DIGEST — not a feature grep
+Six repos copy `check_skill_descriptions.py` in. A vendored copy rots silently, so each one wants
+a guard. **Do not write that guard as a feature-presence grep.**
+
+`publish-skill` had a test named *"the vendored gate is current with upstream, not a stale fork"*
+asserting the file contained `find_wrap_corruption(`, `compare_descriptions(` and
+`MAX_DESC_CHARS - 1)`. Its copy **was** a stale fork — a revision whose `find_wrap_corruption()`
+reported a bogus `BROKEN BY LINE-WRAP` on every `description: >-` skill. All three substrings were
+present, because the drift was *inside* a function whose name never changed. **The test stayed
+green through the entire drift.** A feature grep answers "does this version have the feature",
+never "is this the version I vendored".
+
+Wrap the local note in strip markers and hash the remainder:
+
+```js
+const OPEN  = '--8<-- vendoring note (local addition; stripped before the parity hash) --8<--\n';
+const CLOSE = '--8<-- end vendoring note --8<--\n\n';
+const s = local.indexOf(OPEN), e = local.indexOf(CLOSE, s);
+const stripped = local.slice(0, s) + local.slice(e + CLOSE.length);
+assert.equal(createHash('sha256').update(stripped, 'utf8').digest('hex'), UPSTREAM_SHA256);
+```
+
+Then **name the test for what it proves** — "matches the upstream revision it was vendored from",
+not "is current with upstream" — and say so in the body: this **can** see local edits and drift
+from the pin; it **cannot** see upstream moving on, because CI has no access to this repo.
+Re-vendoring stays a deliberate act. Prove the guard works by restoring the old copy and watching
+it go red.
+
+The note should also record that a version like `2.3.0` here is a `plugin.json`/`marketplace.json`
+version, **not a git tag** — this repo's newest tag is `v2.0.0`, and "v2.2.0" in six downstream
+repos meant a commit subject.
 
 ### The line-wrap corruption trap (silent, and no length check can see it)
 A `>` folded or `|` block scalar joins its lines with a **space** — and Python's `textwrap.wrap()`
