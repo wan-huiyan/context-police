@@ -1,23 +1,23 @@
 ---
 name: context-police
 description: |
-  Use when an agent harness's skills/tools catalog has grown large (hundreds+, e.g. from an auto-skill-minting
-  loop) and is taxing context: the listing of skill names+descriptions is injected every turn AND into every
-  subagent, so cost multiplies on fan-out and small-context agents can overflow ("Prompt is too long" at 0
-  tokens). Also use when one skill's description exceeds the per-skill cap — the harness truncates it mid-word
-  and every trigger phrase past the cut goes silently dead. This skill is the AUDIT + CURATION methodology,
-  measurement/reporting, and a publish-time description gate: the trimming levers are now native harness
-  features, so the durable value is deciding WHAT to trim (episodic lessons vs real skills), applying it
-  safely, and measuring the result. The PROBLEM + METHODOLOGY are harness-agnostic — the Agent Skills standard
-  (agentskills.io) is shared by Claude Code, Cursor, Codex, Copilot CLI, Gemini CLI; only the levers differ.
-  Covers: classification rigor (curate by INTENT not name, conservative asymmetry, blind re-rate); the
-  cross-harness landscape; the Claude Code levers (`skillOverrides`, `disable-model-invocation`, the native
+  Use when an agent harness's skills/tools catalog has grown large (hundreds+, e.g. an auto-skill-minting
+  loop) and is taxing context: the name+description listing is injected every turn AND into every subagent, so
+  cost multiplies on fan-out and small-context agents can overflow ("Prompt is too long" at 0 tokens). Also
+  use when a description exceeds the per-skill cap — the harness truncates mid-word and every trigger phrase
+  past the cut goes silently dead. This skill is the AUDIT + CURATION methodology, measurement/reporting, and
+  a publish-time description gate: the trimming levers are now native, so the durable value is deciding WHAT
+  to trim (episodic lessons vs real skills), applying it safely, and measuring the result. The PROBLEM +
+  METHODOLOGY are harness-agnostic — the Agent Skills standard (agentskills.io) is shared by Claude Code,
+  Cursor, Codex, Copilot CLI, Gemini CLI; only levers differ. Covers: classification rigor (curate by INTENT
+  not name, conservative asymmetry, blind re-rate); the cross-harness landscape; the Claude Code levers
+  (`skillOverrides`, `disable-model-invocation`, the native
   `skillListingBudgetFraction`/`skillListingMaxDescChars` budget read via `/doctor`, and the anti-pattern of
   raising the fraction); the per-skill description cap and the triggers truncation destroys; and the
   `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
   "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.2.1
+version: 2.2.2
 date: 2026-06-17
 ---
 
