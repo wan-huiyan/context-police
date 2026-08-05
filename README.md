@@ -187,6 +187,48 @@ trigger phrases.
 > a schliff run (75→86) left the description at **1,501 chars — 35 under the cap**, and the next feature commit
 > pushed it to 2,004 with no complaint, because schliff does not measure descriptions.
 
+### 🕳️ The gap this gate had, and how it was closed (v2.3.0)
+
+A gate is itself a claim. Three rounds of audit across seven repos found that **the gate's own
+guarantees were narrower than the sentences describing them** — in each case the check ran, went
+green, and was believed. Each fix below ships with a negative control: break it on purpose, watch
+it go red.
+
+**1. Wrap corruption was scored over model-invocable skills only.** `corrupt` was built from the
+non-disabled subset, so a hyphen break inside a `disable-model-invocation: true` skill was neither
+printed nor failed. In `agent-traffic-control` **74 of 94 skills are disabled** — CI was blind for
+most of the repo, which is exactly why its four real corruptions had to be found through `--json`
+rather than the gate. The cap check legitimately skips disabled skills (they consume no listing
+budget); corruption is different — the description is still read when the skill is invoked by
+name, and it ships corrupt the moment the skill is re-enabled. **Now scored over every skill, with
+disabled hits listed in their own group.**
+
+**2. `APPROACHING CAP` hid the urgent cases inside the merely-large ones.** `WARN_FRACTION = 0.75`
+spans everything from 1,152 chars upward, so on a real install that bucket held **29 skills
+spanning 23 to 340 chars of headroom** — same colour, no ordering. This repo's *own* skill sat at
+**cap−3** in there while publishing "leave 30–50 chars of headroom", and nothing distinguished it.
+**New `NO HEADROOM` tier** for anything under `MIN_HEADROOM` (40), sorted tightest-first, with the
+remaining slack printed on every row.
+
+**3. Vendored copies rot, and a feature grep cannot see it.** Six repos copy this script in.
+`publish-skill` guarded its copy with a test named *"the vendored gate is current with upstream,
+not a stale fork"* that asserted three substrings were present. Its copy **was** a stale fork — the
+drift was *inside* a function whose name never changed, so all three greps passed and the test
+stayed green through the entire drift. **SKILL.md now prescribes a pinned sha256** over the file
+with its vendoring note stripped, and requires naming the test for what it actually proves.
+
+**4. `--compare` is blind to backticked literals.** `extract_triggers()` matches double-quoted and
+curly-quoted spans only. `publish-skill`'s 2,385 → 1,503 trim removed three backticked error
+literals from its description and `--compare` reported **0 DROPPED**. An empty table is not proof.
+**SKILL.md now documents the blind spot and ships a description-scoped hand-diff recipe** — scoped
+to the frontmatter, because a whole-file diff finds nothing when the body still carries them.
+
+> The pattern underneath all four: **when a guard's name is a claim, check the claim against the
+> assertion — then break it on purpose.** Same round also found a golden-file test whose
+> missing-snapshot branch ran `writeFileSync(...); assert.ok(true)`, a description-parity comment
+> saying "the four published surfaces" above a loop over five (with a sixth ungated entirely), and
+> a coverage table quoting figures its own committed harness does not reproduce.
+
 ### Trimming safely — the measured procedure
 
 Detecting is the easy half. Trimming *trigger text* is where a careless fix does real damage. Validated
@@ -200,11 +242,14 @@ end-to-end on `agent-review-panel` (2,703 → 1,505 chars, 25 dead triggers reco
 4. **Keep the NOT-for list** — that's precision, and it stops false firing.
 5. **Measure against `old[:cap-1]`**, what the model *actually saw* — not the full oversized source. The wrong
    baseline makes every honest trim look like a regression.
-6. **Expect the first attempt to regress.** Measured first pass: **11 better / 18 same / 10 worse**. You'll
-   optimize the distinctive triggers and quietly drop natural-language phrases. Set-difference the word sets,
-   restore exactly what the regressed prompts need, re-cut. Second pass: **13 / 25 / 1**.
+6. **Expect the first attempt to regress.** The first pass measured **11 better / 18 same / 10 worse** —
+   you'll optimize the distinctive triggers and quietly drop natural-language phrases. Set-difference the
+   word sets, restore exactly what the regressed prompts need, re-cut. The shipped second pass measures
+   **12 better / 27 same / 0 worse** against the committed harness. *(The first-pass figure came from an
+   intermediate state that was never committed and does not reproduce; the second-pass one does — see
+   `agent-review-panel` CHANGELOG v3.8.2, which corrects an earlier "13 / 25 / 1".)*
 7. **Track separation**, not just positive coverage — score the negative prompts too, so the trim doesn't buy
-   recall with false firing (`+26.0 → +32.0 pts`).
+   recall with false firing (**+0.2605 → +0.3183**).
 8. **Leave ~30–50 chars of headroom.** Landing at cap−2 is one edit from breaking again.
 
 ### Regression archaeology
@@ -325,6 +370,7 @@ CI (`npm test`, zero-dependency `node --test`) fails if the copies drift or the 
 
 ## 📜 Version history
 
+- **v2.3.0** — **The gate's own guarantees were narrower than the sentences describing them.** Four fixes, each with a negative control — see [The gap this gate had](#-the-gap-this-gate-had-and-how-it-was-closed-v230). **(1) Wrap corruption is now scored over EVERY skill**, disabled included, and fails the build; it was scoped to the model-invocable subset, so in a repo where 74 of 94 skills are disabled the check was silently blind to most of it — which is why four real corruptions there had to be found via `--json` instead of CI. Disabled hits print in their own group. **(2) New `NO HEADROOM` tier** (`MIN_HEADROOM = 40`): `WARN_FRACTION = 0.75` lumped a description with 23 chars of slack in with one that had 340 — 29 skills, one bucket, one colour — and this skill sat at cap−3 inside it. Sorted tightest-first, remaining slack on every row. **(3)** SKILL.md now prescribes a **pinned sha256** for vendored copies rather than a feature grep: a "not a stale fork" test built from three substring assertions stayed green on a copy that genuinely *was* a stale fork, because the drift was inside a function whose name never changed. **(4)** SKILL.md now documents that **`--compare` only sees double-quoted spans** — backticked literals are invisible, and one repo's trim dropped three of them while `--compare` reported 0 DROPPED — and ships a description-scoped hand-diff recipe. Also corrects the `agent-review-panel` separation figure quoted in the procedure (`+26.0 → +32.0 pts` → **`+0.2605 → +0.3183`**) and the second-pass split (`13 / 25 / 1` → **`12 / 27 / 0`**); those came from an uncommitted one-off and do not reproduce against the harness that now ships in that repo. `--json` gains `min_headroom`, `counts.critical_headroom`, and per-skill `critical` / `headroom`.
 - **v2.2.2** — **This skill was three characters from breaking its own rule.** The description was **1,533** chars against the 1,536 cap: under it, so nothing was truncated and no trigger was lost — but with **3 chars of headroom**, while step 8 of this skill's own trimming procedure says *"Leave headroom (~30–50 chars). A trim landing at cap−2 is one edit from breaking again."* Retrimmed to **1,483** (**53** headroom) by compressing prose only: `the listing of skill names+descriptions` → `the name+description listing`, `native harness features` → `native`, `one skill's description` → `a description`, `only the levers differ` → `only levers differ`. Verified the way this skill tells you to: `--compare` reports **0 dropped, 0 narrowed** with both quoted trigger phrases (`"Prompt is too long"`, `"name-invoked → restore"`) intact; the content-word set loses only `descriptions`, `features`, `from`, `names`, `one` — plurals and filler from those four edits — and gains nothing; no backticked literal dropped; re-wrapped with `break_on_hyphens=False` and the gate reports no `BROKEN BY LINE-WRAP`. Both copies of `SKILL.md` stay byte-identical (`plugin-copy-sync` test green).
   - **Note on the numbering below.** PR [#6](https://github.com/wan-huiyan/context-police/pull/6) was squash-merged as `eedad0f` with the subject *"(v2.1.0)"*, but the branch had already gone 2.1.0 → 2.2.0 → 2.2.1 internally, so `main` jumped **2.0.0 → 2.2.1** in a single commit and the v2.1.0 entry below is the only record of all three. `v2.2.0` added wrap-corruption detection and `--compare`; `v2.2.1` (`6f854ea`) fixed `find_wrap_corruption()` false-positiving on `description: >-`. Neither is a git tag — this repo's newest tag is `v2.0.0`, so every "v2.2.x" reference anywhere in this ecosystem means a `plugin.json`/`marketplace.json` version, never a release.
 - **v2.1.0** — **the publish-time description-cap gate** (`scripts/check_skill_descriptions.py`) **+ the measured trimming procedure.** Adds the upstream half: measure `description` + `whenToUse` against `skillListingMaxDescChars` (1536) and fail CI before an oversized description ships. The finding that motivated it: **truncation silently kills trigger phrases** — the harness keeps `full[:1535]` and drops the rest, so any `"…"` trigger past that position can never fire. Measured on a real 18-plugin install: 12 skills over cap, **30 trigger phrases invisible**, one skill having lost all 11 triggers for a fully-documented feature. `--triggers` names them, making a deliberate trim *verifiable* rather than a leap of faith.

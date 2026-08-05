@@ -129,6 +129,64 @@ test('a hyphen wrapped across folded-scalar lines is caught', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('wrap corruption in a DISABLED skill still fails the gate', () => {
+  // Regression guard for the gap that let four real corruptions ship in
+  // agent-traffic-control: `corrupt` used to be built from the model-invocable subset,
+  // so a hyphen break inside a `disable-model-invocation: true` skill was neither
+  // printed nor failed. 74 of that repo's 94 skills are disabled, so CI was blind for
+  // the large majority of it, and the defects had to be found via --json instead.
+  //
+  // The cap check legitimately skips disabled skills -- they consume no listing budget.
+  // Corruption is different: the description is still read when the skill is invoked by
+  // name, and it ships corrupt the moment the skill is re-enabled.
+  const dir = mkdtempSync(join(tmpdir(), 'cp-wrap-disabled-'));
+  const skillDir = join(dir, 'manual-only');
+  mkdirSync(skillDir);
+  writeFileSync(join(skillDir, 'SKILL.md'),
+    '---\nname: manual-only\ndescription: >\n  Use when the user asks for a token-\n' +
+    '  efficient review of the thing.\ndisable-model-invocation: true\n---\n\nbody\n');
+  try {
+    const r = run([dir, '--no-color']);
+    assert.equal(r.status, 1, 'corruption in a disabled skill must fail the gate');
+    assert.match(r.stdout, /BROKEN BY LINE-WRAP/);
+    assert.match(r.stdout, /disabled:/, 'disabled hits are listed in their own group');
+    assert.match(r.stdout, /manual-only:\s+token- efficient/);
+
+    const j = JSON.parse(run([dir, '--json']).stdout);
+    assert.equal(j.counts.wrap_corruption, 1,
+      '--json must count corruption over all skills, matching the text report');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a description under MIN_HEADROOM is called out separately from APPROACHING CAP', () => {
+  // WARN_FRACTION alone spans 0.75*cap upward, so a description with 3 chars of headroom
+  // shared a bucket -- and a colour -- with one that had 340. This repo's own skill sat
+  // at cap-3 inside it while publishing "leave 30-50 chars of headroom", and nothing
+  // distinguished the two. Both are still under the cap, so neither fails the build.
+  const dir = mkdtempSync(join(tmpdir(), 'cp-headroom-'));
+  for (const [name, chars] of [['tight', 1520], ['roomy', 1200]]) {
+    const d = join(dir, name);
+    mkdirSync(d);
+    writeFileSync(join(d, 'SKILL.md'),
+      `---\nname: ${name}\ndescription: |\n  ${'x'.repeat(chars)}\n---\n\nbody\n`);
+  }
+  try {
+    const r = run([dir, '--no-color']);
+    assert.equal(r.status, 0, 'under the cap is not a failure, however tight');
+    assert.match(r.stdout, /NO HEADROOM \(1\)/);
+    assert.match(r.stdout, /tight/);
+    assert.match(r.stdout, /APPROACHING CAP \(1\)/);
+
+    const j = JSON.parse(run([dir, '--json']).stdout);
+    assert.equal(j.counts.critical_headroom, 1);
+    assert.equal(j.min_headroom, 40);
+    const tight = j.skills.find((s) => s.name === 'tight');
+    assert.equal(tight.critical, true);
+    assert.equal(tight.headroom, 16);
+    assert.equal(j.skills.find((s) => s.name === 'roomy').critical, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a clean hyphenated description is not flagged', () => {
   // Guard against the wrap check firing on legitimate end-of-line hyphens.
   const { dir, cleanup } = withSkill(
