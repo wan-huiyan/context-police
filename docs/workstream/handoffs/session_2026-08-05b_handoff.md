@@ -85,9 +85,10 @@ explainer, *after* the session had been reported as delivered. See §3 and
   (6 shipped `SKILL.md` files, no bump) and a dead NOT-for target in `claude-ecosystem-hygiene`.
   Both are now shipped and verified byte-identical against the installed copies. The *class* of
   failure remains unguarded — item 1 above.
-- **`~/.claude/usage-tracking/` is not set up** (no `README.md`), and the **cctime fork is not
-  installed** at `~/.claude/tools/cctime-fork/`. Session metrics fell back to the bundled
-  `session_metrics.py` (tokens only, no cost). One-time setup surfaced to the user.
+- **`~/.claude/usage-tracking/` is in active use** (18 prior session records) but has **no
+  `README.md`** — the schema/methodology doc the skill expects. Separately, the **cctime fork is not
+  installed** at `~/.claude/tools/cctime-fork/`, so session metrics fell back to the bundled
+  `session_metrics.py`: tokens only, **no cost figures**. Both are one-time setup.
 - ~~**`~/Documents` is not a git repo**, so this handoff cannot be committed or PR'd.~~ **RESOLVED** —
   these docs now live in `context-police/docs/workstream/` and ship with that repo.
 

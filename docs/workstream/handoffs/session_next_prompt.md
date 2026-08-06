@@ -107,10 +107,10 @@ down what the scope excludes; the exclusion is where the next defect lives.
 
 --------------------------------------------------------------------------------
 HOUSEKEEPING, if you have appetite:
-  - ~/.claude/usage-tracking/ has no README.md and the cctime fork is not
-    installed at ~/.claude/tools/cctime-fork/ -- session metrics fall back to a
-    tokens-only recompute with no cost figures. One-time setup is in
-    session-handoff step 24c.
+  - ~/.claude/usage-tracking/ is in active use (18 records) but has no README.md,
+    and the cctime fork is not installed at ~/.claude/tools/cctime-fork/ -- so
+    session metrics fall back to a tokens-only recompute with NO cost figures.
+    Both are one-time setup; see session-handoff step 24c.
 
 ALWAYS bump the plugin version when a SHIPPED file changes -- not just when a
 description changes. Finish by measuring the LIVE INSTALL. Verify nothing you
