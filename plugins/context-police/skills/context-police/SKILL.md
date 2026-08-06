@@ -17,7 +17,7 @@ description: |
   `disable-model-invocation` DUAL-ROLE footgun — also the correct setting for a user slash-command, so a
   "name-invoked → restore" audit is a false-positive machine.
 author: Claude Code
-version: 2.3.0
+version: 2.4.0
 date: 2026-06-17
 ---
 
@@ -338,10 +338,32 @@ After a treatment, render a self-contained, interactive HTML recap (reads `.clau
 computes counts + the bare-name token estimate; clickable tiles → a searchable explorer of every skill by decision).
 Honest-by-construction; opens from `file://`.
 ```bash
-python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
-  --settings .claude/settings.json [--skills-dir ~/.claude/skills] \
-  [--decisions panel-decisions.json] [--title "My Project"] [--out skill-treatment.html]
+# Resolve across all three install roots. A plugin install creates neither of the first two.
+S="${CLAUDE_PLUGIN_ROOT:+${CLAUDE_PLUGIN_ROOT}/skills/context-police/scripts/render_treatment_report.py}"
+[ -f "$S" ] || S="$HOME/.claude/skills/context-police/scripts/render_treatment_report.py"
+[ -f "$S" ] || S="$(find -L "$HOME/.claude/plugins/cache" -mindepth 7 -maxdepth 7 \
+    -path '*/context-police/*/skills/context-police/scripts/render_treatment_report.py' 2>/dev/null \
+  | awk -F/ '{print $(NF-4)"\t"$0}' | sort -V -k1,1 | tail -1 | cut -f2-)"
+
+if [ -f "$S" ]; then
+  python3 "$S" \
+    --settings .claude/settings.json [--skills-dir ~/.claude/skills] \
+    [--decisions panel-decisions.json] [--title "My Project"] [--out skill-treatment.html]
+else
+  echo "render_treatment_report.py: not found - tried \$CLAUDE_PLUGIN_ROOT/skills/context-police/scripts/, ~/.claude/skills/context-police/scripts/, and the plugin cache"
+fi
 ```
+**Why three roots.** A plugin install lands under `~/.claude/plugins/cache/<marketplace>/context-police/<version>/`,
+so `~/.claude/skills/context-police/` does not exist and a single hardcoded root silently misses. `CLAUDE_PLUGIN_ROOT`
+does not rescue it on its own — it is often unset in the shell a step runs in, and it points at the *calling* plugin's
+root, so it can never reach a sibling. Four details in the snippet are load-bearing: rank on the **version segment
+alone** (`$(NF-4)`) because the marketplace segment precedes the version and a plain `sort -V` over whole paths would
+let `aaa-mkt/2.5.0` lose to `zzz-mkt/1.0.0`; use `find`, not a glob, because zsh's `nomatch` fails a non-matching glob
+*before* `2>/dev/null` can apply; guard **before** any `> "$OUT"` redirect, since the shell creates and truncates the
+file before the command runs and leaves a 0-byte file that reads as a real record; and say *"not found - tried
+&lt;paths&gt;"* rather than *"not installed"* — a failed lookup is not evidence about install state, and a bare "not
+installed" has already been misread by a human as proof a skill was absent.
+
 Verify the render with `browser_evaluate` over a served port (`file://` is blocked in MCP browser; the screenshot
 subsystem wedges) or `open` it on macOS.
 

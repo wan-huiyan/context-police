@@ -277,13 +277,26 @@ Exit `0` clean · `1` over cap · `2` bad path (so a typo fails loudly instead o
 After you apply a treatment, render a clickable HTML report of exactly what happened:
 
 ```bash
-python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py \
-  --settings .claude/settings.json \
-  --skills-dir ~/.claude/skills \
-  --decisions panel-decisions.json \
-  --title "My Project" \
-  --out skill-treatment.html
+# Resolve across all three install roots. A plugin install creates neither of the first two.
+S="${CLAUDE_PLUGIN_ROOT:+${CLAUDE_PLUGIN_ROOT}/skills/context-police/scripts/render_treatment_report.py}"
+[ -f "$S" ] || S="$HOME/.claude/skills/context-police/scripts/render_treatment_report.py"
+[ -f "$S" ] || S="$(find -L "$HOME/.claude/plugins/cache" -mindepth 7 -maxdepth 7 \
+    -path '*/context-police/*/skills/context-police/scripts/render_treatment_report.py' 2>/dev/null \
+  | awk -F/ '{print $(NF-4)"\t"$0}' | sort -V -k1,1 | tail -1 | cut -f2-)"
+
+if [ -f "$S" ]; then
+  python3 "$S" \
+    --settings .claude/settings.json \
+    --skills-dir ~/.claude/skills \
+    --decisions panel-decisions.json \
+    --title "My Project" \
+    --out skill-treatment.html
+else
+  echo "render_treatment_report.py: not found - tried \$CLAUDE_PLUGIN_ROOT/skills/context-police/scripts/, ~/.claude/skills/context-police/scripts/, and the plugin cache"
+fi
 ```
+
+> **Why the resolver?** A `/plugin install` puts the script under `~/.claude/plugins/cache/<marketplace>/context-police/<version>/skills/context-police/scripts/` — `~/.claude/skills/context-police/` never exists, so a single hardcoded root silently misses and the recap step does nothing while the summary still reads clean. The version is ranked on its own path segment (`$(NF-4)`), not the whole path, because the marketplace name comes first and would otherwise decide the ordering.
 
 - Data-driven & honest-by-construction: it reads the OFF set straight from your `settings.json`, enumerates the skills universe, and computes the bare-name token estimate (`Σ(len(name)+3)/4`, paid every turn + per subagent).
 - The `--decisions` file is optional (`{"pulls":[…],"adds":[…],"override":[…]}`); omit it for a plain off/on drill-down, pass it to surface the review-panel reasons.
@@ -370,6 +383,7 @@ CI (`npm test`, zero-dependency `node --test`) fails if the copies drift or the 
 
 ## 📜 Version history
 
+- **v2.4.0** — **The recap step was unreachable on a plugin install.** `SKILL.md` (and this README) told the agent to run `python3 ~/.claude/skills/context-police/scripts/render_treatment_report.py`. A `/plugin install` never creates that path — the script lands under `~/.claude/plugins/cache/<marketplace>/context-police/<version>/skills/context-police/scripts/` — so on the plugin install path the command just failed, and the usual "log it and continue" response means the recap silently does nothing while the run still reads clean. Both call sites now resolve across all three install roots (`$CLAUDE_PLUGIN_ROOT` → `~/.claude/skills/` → a version-ranked `find` over the plugin cache) and print `not found - tried <paths>` instead of a bare "not installed", which has already been misread by a human as proof a skill was absent. `CLAUDE_PLUGIN_ROOT` alone does not fix this: it is frequently unset in the shell a step runs in, and it points at the *calling* plugin's own root so it can never reach a sibling. The version is ranked on its **own path segment** (`awk '{print $(NF-4)}'`), not the whole path — the marketplace segment precedes the version, so a plain `sort -V` over full paths would let `aaa-mkt/2.5.0` lose to `zzz-mkt/1.0.0`. New `tests/plugin-path-resolution.test.mjs` extracts the resolver straight out of `SKILL.md` and runs it against a fixture cache, so a regression fails CI rather than being caught by eye.
 - **v2.3.0** — **The gate's own guarantees were narrower than the sentences describing them.** Four fixes, each with a negative control — see [The gap this gate had](#-the-gap-this-gate-had-and-how-it-was-closed-v230). **(1) Wrap corruption is now scored over EVERY skill**, disabled included, and fails the build; it was scoped to the model-invocable subset, so in a repo where 74 of 94 skills are disabled the check was silently blind to most of it — which is why four real corruptions there had to be found via `--json` instead of CI. Disabled hits print in their own group. **(2) New `NO HEADROOM` tier** (`MIN_HEADROOM = 40`): `WARN_FRACTION = 0.75` lumped a description with 23 chars of slack in with one that had 340 — 29 skills, one bucket, one colour — and this skill sat at cap−3 inside it. Sorted tightest-first, remaining slack on every row. **(3)** SKILL.md now prescribes a **pinned sha256** for vendored copies rather than a feature grep: a "not a stale fork" test built from three substring assertions stayed green on a copy that genuinely *was* a stale fork, because the drift was inside a function whose name never changed. **(4)** SKILL.md now documents that **`--compare` only sees double-quoted spans** — backticked literals are invisible, and one repo's trim dropped three of them while `--compare` reported 0 DROPPED — and ships a description-scoped hand-diff recipe. Also corrects the `agent-review-panel` separation figure quoted in the procedure (`+26.0 → +32.0 pts` → **`+0.2605 → +0.3183`**) and the second-pass split (`13 / 25 / 1` → **`12 / 27 / 0`**); those came from an uncommitted one-off and do not reproduce against the harness that now ships in that repo. `--json` gains `min_headroom`, `counts.critical_headroom`, and per-skill `critical` / `headroom`.
 - **v2.2.2** — **This skill was three characters from breaking its own rule.** The description was **1,533** chars against the 1,536 cap: under it, so nothing was truncated and no trigger was lost — but with **3 chars of headroom**, while step 8 of this skill's own trimming procedure says *"Leave headroom (~30–50 chars). A trim landing at cap−2 is one edit from breaking again."* Retrimmed to **1,483** (**53** headroom) by compressing prose only: `the listing of skill names+descriptions` → `the name+description listing`, `native harness features` → `native`, `one skill's description` → `a description`, `only the levers differ` → `only levers differ`. Verified the way this skill tells you to: `--compare` reports **0 dropped, 0 narrowed** with both quoted trigger phrases (`"Prompt is too long"`, `"name-invoked → restore"`) intact; the content-word set loses only `descriptions`, `features`, `from`, `names`, `one` — plurals and filler from those four edits — and gains nothing; no backticked literal dropped; re-wrapped with `break_on_hyphens=False` and the gate reports no `BROKEN BY LINE-WRAP`. Both copies of `SKILL.md` stay byte-identical (`plugin-copy-sync` test green).
   - **Note on the numbering below.** PR [#6](https://github.com/wan-huiyan/context-police/pull/6) was squash-merged as `eedad0f` with the subject *"(v2.1.0)"*, but the branch had already gone 2.1.0 → 2.2.0 → 2.2.1 internally, so `main` jumped **2.0.0 → 2.2.1** in a single commit and the v2.1.0 entry below is the only record of all three. `v2.2.0` added wrap-corruption detection and `--compare`; `v2.2.1` (`6f854ea`) fixed `find_wrap_corruption()` false-positiving on `description: >-`. Neither is a git tag — this repo's newest tag is `v2.0.0`, so every "v2.2.x" reference anywhere in this ecosystem means a `plugin.json`/`marketplace.json` version, never a release.
