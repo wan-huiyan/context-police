@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en" data-theme="arcade"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The menu board that was too small — plain-English report</title>
+<style>
+  :root{
+    --bg:#0a0612;--panel:#1a0f2e;--panel2:#22143b;--ink:#f3e9ff;--dim:#a991c9;--line:#3a2557;
+    --flame:#ff5a3c;--coin:#ffce4a;--neon:#46e8c8;--violet:#b06bff;--moon:#7aa2ff;--good:#46e88a;--pink:#ff5ea8;--warn:#ffae3c;
+    --bold:#fff;--on-accent:#fff;--sub:#cdbbe9;
+    --glow1:#2a1450;--glow2:#2a0f3a;--scan:rgba(255,255,255,.018);--hero-glow:rgba(176,107,255,.45);
+    --tag-bd:#4a3a12;--tag-bg:#231a06;--chip:#160c28;
+    --green-bd:#2a5e3e;--green-bg:#0d1f15;--warnc-bd:#5e4a12;--warnc-bg:#1e1606;
+    --sec1:rgba(26,15,46,.7);--sec2:rgba(16,9,30,.7);--track:#120a20;
+    --good-d:#1f9e84;--good-b:#46e8c8;--bad-d:#b0341e;--bad-b:#ff5a3c;--mid-d:#c98a1e;--mid-b:#ffce4a;
+    --call-bd:#5e2a4a;--call-bg:#220b1a;--eng:#8f78b3;--hair:#1c1130;
+  }
+  :root[data-theme="paper"]{
+    --bg:#fbf8ff;--panel:#ffffff;--panel2:#f5effe;--ink:#2a2140;--dim:#5f5078;--line:#e6dcf6;
+    --flame:#dc3a17;--coin:#9a6b00;--neon:#0d8f80;--violet:#7c3aed;--moon:#3b5bdb;--good:#0e9f6e;--pink:#c2256b;--warn:#9a5b00;
+    --bold:#1a1228;--on-accent:#fff;--sub:#4a3d63;
+    --glow1:#efe4ff;--glow2:#f6edff;--scan:rgba(0,0,0,.022);--hero-glow:rgba(124,58,237,.16);
+    --tag-bd:#e7d3a0;--tag-bg:#fbf3df;--chip:#f4eefe;
+    --green-bd:#bce3cf;--green-bg:#eafaf1;--warnc-bd:#f0dcae;--warnc-bg:#fdf6e3;
+    --sec1:rgba(255,255,255,.92);--sec2:rgba(247,242,255,.92);--track:#ece4f8;
+    --good-d:#10b981;--good-b:#34d399;--bad-d:#ef4444;--bad-b:#f87171;--mid-d:#f59e0b;--mid-b:#fbbf24;
+    --call-bd:#e7c9d8;--call-bg:#fdeef5;--eng:#6f6390;--hair:#efe7fb;
+  }
+  :root[data-theme="midnight"]{
+    --bg:#0b1026;--panel:#161b3a;--panel2:#1e244a;--ink:#e7e7fb;--dim:#9aa3d0;--line:#2c3566;
+    --flame:#ff7a59;--coin:#ffd166;--neon:#5ee0c8;--violet:#8b7cf6;--moon:#7aa2ff;--good:#5ee08a;--pink:#ff6ec7;--warn:#ffb454;
+    --bold:#ffffff;--on-accent:#fff;--sub:#c5cae9;
+    --glow1:#241a55;--glow2:#16215a;--scan:rgba(255,255,255,.02);--hero-glow:rgba(139,124,246,.45);
+    --tag-bd:#4a4012;--tag-bg:#1a1606;--chip:#10173a;
+    --green-bd:#244b3a;--green-bg:#0c2020;--warnc-bd:#4a4012;--warnc-bg:#1a1606;
+    --sec1:rgba(22,27,58,.72);--sec2:rgba(11,16,38,.72);--track:#0a0f2a;
+    --good-d:#2a8f7a;--good-b:#5ee0c8;--bad-d:#b0341e;--bad-b:#ff7a59;--mid-d:#c98a1e;--mid-b:#ffd166;
+    --call-bd:#3a2a5e;--call-bg:#161033;--eng:#9197c8;--hair:#1a2147;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,var(--glow1) 0,transparent 60%),
+    radial-gradient(900px 500px at -10% 110%,var(--glow2) 0,transparent 55%),var(--bg);color:var(--ink);
+    font:15px/1.62 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.2px;padding:30px 18px 80px;
+    transition:background .25s,color .25s}
+  .wrap{max-width:1000px;margin:0 auto}.px{font-weight:800;letter-spacing:1px}code{color:var(--coin);font-size:.92em}
+  b{color:var(--bold)}
+  .theme-switch{position:fixed;top:14px;right:14px;display:flex;gap:6px;z-index:50;
+    background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:0 8px 24px -12px rgba(0,0,0,.5)}
+  .theme-switch button{cursor:pointer;border:0;background:transparent;border-radius:999px;width:30px;height:30px;
+    font-size:15px;line-height:1;display:grid;place-items:center;filter:grayscale(.5) opacity(.55);transition:filter .15s,background .15s}
+  .theme-switch button:hover{filter:none;background:var(--panel2)}
+  .theme-switch button[aria-pressed="true"]{filter:none;background:var(--panel2);box-shadow:0 0 0 1px var(--violet) inset}
+  .theme-switch button:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  header.hero{border:1px solid var(--line);border-radius:18px;padding:28px 26px;margin-bottom:22px;
+    background:linear-gradient(160deg,var(--panel2),var(--panel) 70%);position:relative;overflow:hidden;box-shadow:0 24px 60px -30px var(--hero-glow)}
+  header.hero::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,var(--scan) 3px 4px);pointer-events:none}
+  .tag{display:inline-block;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--coin);border:1px solid var(--tag-bd);background:var(--tag-bg);border-radius:999px;padding:4px 11px;margin-bottom:14px}
+  h1{margin:.1em 0 .2em;font-size:30px;line-height:1.14}h1 .em{color:var(--neon)}
+  .sub{color:var(--sub);font-size:14.5px;max-width:820px}
+  .pills{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-size:12px;border:1px solid var(--line);background:var(--chip);border-radius:8px;padding:6px 10px;color:var(--dim)}.pill b{color:var(--ink)}
+  .pill.green{border-color:var(--green-bd);background:var(--green-bg)}.pill.warn{border-color:var(--warnc-bd);background:var(--warnc-bg)}
+  section{border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:16px 0;background:linear-gradient(180deg,var(--sec1),var(--sec2))}
+  section h2{margin:0 0 4px;font-size:19px;display:flex;align-items:center;gap:10px}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--violet);color:var(--on-accent);font-size:13px;font-weight:800}
+  section .lead{color:var(--dim);font-size:13.5px;margin:6px 0 14px}
+  p{margin:10px 0}.big{font-size:15px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:10px 0}
+  .tile{border:1px solid var(--line);border-radius:13px;padding:15px 14px;background:linear-gradient(165deg,var(--panel),var(--chip))}
+  .tile .v{font-size:26px;font-weight:800}.tile .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .tile .note{font-size:11px;color:var(--dim);margin-top:5px}
+  .t-flame .v{color:var(--flame)}.t-neon .v{color:var(--neon)}.t-coin .v{color:var(--coin)}.t-violet .v{color:var(--violet)}.t-pink .v{color:var(--pink)}.t-good .v{color:var(--good)}.t-warn .v{color:var(--warn)}
+  .bar-row{display:grid;grid-template-columns:210px 1fr 70px;align-items:center;gap:12px;margin:11px 0}
+  .bar-row .lab{font-size:12.5px;color:var(--dim);text-align:right}.bar-row .lab b{color:var(--ink)}
+  .track{height:26px;border-radius:7px;background:var(--track);border:1px solid var(--line);overflow:hidden}
+  .fill{height:100%;border-radius:6px;transform-origin:left;animation:grow 1.1s cubic-bezier(.2,.8,.2,1) both}
+  .fill.good{background:linear-gradient(90deg,var(--good-d),var(--good-b))}.fill.bad{background:linear-gradient(90deg,var(--bad-d),var(--bad-b))}.fill.mid{background:linear-gradient(90deg,var(--mid-d),var(--mid-b))}
+  @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}.bar-row .amt{font-size:13px;font-weight:800}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+  td.r{text-align:right;font-variant-numeric:tabular-nums}.hi{color:var(--neon);font-weight:800}.lo{color:var(--flame);font-weight:800}
+  .callout{border:1px solid var(--call-bd);background:var(--call-bg);border-radius:12px;padding:15px 17px;margin:12px 0}
+  .callout.aha{border-color:var(--warnc-bd);background:var(--warnc-bg)}.callout.good{border-color:var(--green-bd);background:var(--green-bg)}.callout .i{font-size:18px;margin-right:6px}
+  .callout h3{margin:0 0 6px;font-size:14px;color:var(--bold)}.callout p{font-size:12.5px;color:var(--dim);margin:6px 0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  ul.tight{margin:6px 0;padding-left:18px}ul.tight li{margin:5px 0;font-size:12.8px;color:var(--dim)}ul.tight li b{color:var(--ink)}
+  .meta{display:inline-block;font-size:11px;color:var(--dim);background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-left:6px}
+  .eng{font-size:11.5px;color:var(--eng);border-left:2px solid var(--line);padding-left:9px;margin:6px 0 2px}
+  figure.figure{margin:14px auto 6px;text-align:center;max-width:460px}
+  figure.figure svg{width:100%;height:auto;shape-rendering:crispEdges;display:block}
+  figure.figure figcaption{font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.5}
+  .chk{list-style:none;padding:0;margin:6px 0}.chk li{font-size:12.8px;color:var(--dim);padding:6px 0 6px 26px;position:relative;border-bottom:1px solid var(--hair)}
+  .chk li::before{content:"▢";position:absolute;left:4px;color:var(--coin)}.chk li b{color:var(--ink)}.chk li.d::before{content:"✓";color:var(--good)}
+  .ok{color:var(--good);font-weight:700}.no{color:var(--flame);font-weight:700}
+  footer{color:var(--dim);font-size:12px;text-align:center;margin-top:28px;border-top:1px solid var(--line);padding-top:16px}
+  a{color:var(--neon)}
+  @media(max-width:780px){.tiles,.two{grid-template-columns:1fr 1fr}.bar-row{grid-template-columns:130px 1fr 54px}.theme-switch{top:10px;right:10px}}
+  @media (prefers-reduced-motion:reduce){.fill{animation:none}body{transition:none}}
+  @media print{
+    .theme-switch{display:none!important}.fill{animation:none}
+    :root{--bg:#fff;--panel:#fff;--panel2:#f6f2fc;--ink:#1a1228;--bold:#000;--dim:#444;--sub:#333;--line:#ddd;--hair:#eee;
+      --chip:#f4eefe;--track:#eee;--scan:transparent;--hero-glow:transparent;--glow1:#fff;--glow2:#fff;--sec1:#fff;--sec2:#fff;
+      --coin:#8a6100;--neon:#0c7d70;--flame:#c43317;--good:#0e9f6e;--eng:#555;
+      --call-bg:#fdeef5;--call-bd:#e7c9d8;--green-bg:#eafaf1;--green-bd:#bce3cf;--warnc-bg:#fdf6e3;--warnc-bd:#f0dcae;}
+    body{background:#fff}
+  }
+</style></head><body>
+
+  <div class="theme-switch" role="group" aria-label="Color theme">
+    <button type="button" data-set="arcade" aria-pressed="true" title="Arcade (default)">🎮</button>
+    <button type="button" data-set="paper" aria-pressed="false" title="Paper (light / print)">📄</button>
+    <button type="button" data-set="midnight" aria-pressed="false" title="Midnight">🌌</button>
+  </div>
+
+  <main class="wrap">
+
+  <header class="hero">
+    <span class="tag">Claude Code skills · description-cap workstream · 2026-08-05 · plain-English report</span>
+    <h1 class="px">🪧 The <span class="em">menu board</span> that was too small — and the inspector who kept missing it</h1>
+    <p class="sub">Every skill advertises itself with a short description. Think of it as a
+      <b>menu board outside a shop</b>: the board fits a fixed amount, and anything you write past the edge
+      simply isn't there for customers to read. Earlier rounds fixed the over-full boards. This session went
+      after something more uncomfortable — <b>the inspector's own tools</b>. Good outcome, and several
+      genuinely embarrassing findings.</p>
+    <div class="pills">
+      <span class="pill green">live install <b>clean</b> — 0 boards over the edge</span>
+      <span class="pill warn">the inspection handbook's page&nbsp;1 was <b>wrong</b></span>
+      <span class="pill warn">a "is my tape measure current?" check passed on a <b>broken tape measure</b></span>
+      <span class="pill"><b>17</b> changes merged · <b>11</b> reached the installed copies</span>
+      <span class="pill">nothing a skill <i>says</i> was changed <b>except two</b></span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="num">★</span> The one-paragraph version</h2>
+    <p class="big">Every <b>model-invocable</b> skill's description gets shown to the model on <b>every
+      single turn</b>, and it's capped at <b>1,536 characters</b>. Go over and the system keeps the first 1,535 and cuts mid-word —
+      so any "use this when the user says…" phrase past that point is <b>silently dead</b>. Previous rounds
+      fixed the over-full descriptions. This session was supposed to be tidy-up, and instead found that
+      <b>the checks meant to catch all this were themselves quietly lying</b>: a test named "not a stale
+      copy" passed on a genuinely stale copy; the corruption check skipped the majority of skills in one
+      repo; and the tool that preaches "leave yourself 30–50 characters of room" had <b>3</b>. All fixed,
+      all shipped, all verified against the real installation. <b>The honest catch:</b> the handoff
+      document that told me what to do opened with an instruction that was <b>flatly false</b> — following
+      it would have "corrected" every published character figure across six repositories — all of which
+      were already right.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">1</span> What the menu board is, and why the edge matters</h2>
+
+    <figure class="figure" role="img"
+      aria-label="Pixel scene: a shop menu board. The first lines fit. The last line is cut mid-word at the board's edge and continues into a shaded zone labelled NEVER READ, showing text that was written but is invisible to customers.">
+      <svg viewBox="0 0 210 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="7" y="7" width="126" height="75" fill="var(--panel2)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="133" y="7" width="63" height="75" fill="var(--track)"/>
+        <rect x="131" y="3" width="3" height="83" fill="var(--flame)"/>
+        <rect x="14" y="17" width="98" height="4" fill="var(--neon)"/>
+        <rect x="14" y="28" width="84" height="4" fill="var(--neon)"/>
+        <rect x="14" y="39" width="105" height="4" fill="var(--neon)"/>
+        <rect x="14" y="50" width="77" height="4" fill="var(--neon)"/>
+        <rect x="14" y="61" width="112" height="4" fill="var(--coin)"/>
+        <rect x="133" y="61" width="56" height="4" fill="var(--dim)" opacity=".45"/>
+        <rect x="126" y="61" width="4" height="4" fill="var(--coin)"/>
+        <rect x="14" y="72" width="63" height="4" fill="var(--dim)" opacity=".45"/>
+        <text x="164" y="30" text-anchor="middle" font-size="8" fill="var(--dim)" font-family="inherit">NEVER</text>
+        <text x="164" y="42" text-anchor="middle" font-size="8" fill="var(--dim)" font-family="inherit">READ</text>
+        <text x="69" y="93" text-anchor="middle" font-size="8" fill="var(--dim)" font-family="inherit">1,536 chars</text>
+        <text x="140" y="93" font-size="8" fill="var(--flame)" font-family="inherit">the edge</text>
+      </svg>
+      <figcaption>The board holds <b>1,536</b> characters. The lines in teal fit. The gold line is cut
+        <b>mid-word</b> at the edge, and everything past it — the grey — is <b>never read by anyone</b>.
+        It costs you no tokens; it costs you the trigger — and, through a shared budget, other skills'
+        descriptions too. Nothing warns you.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="callout"><h3>🪧 What goes on the board</h3>
+        <p>Not marketing copy — <b>the actual trigger phrases</b>. "Use this when the user says <i>budget
+          review</i>." If that phrase sits past the edge, the skill can no longer be summoned by it. The
+          feature still exists; nobody can order it. And the street itself has limited frontage: when too
+          many shops put boards out, the <b>least-visited ones get their board removed entirely</b>,
+          however short it is.</p></div>
+      <div class="callout good"><h3>📏 What the inspector does</h3>
+        <p>A script measures every board, flags the ones over the edge, and lists exactly which phrases fell
+          off. Earlier rounds used it to fix <b>12</b> over-full boards and bring back <b>30</b> dead
+          phrases.</p></div>
+    </div>
+    <p class="eng">Engineer's note: the board is the <code>description:</code> field in a skill's
+      <code>SKILL.md</code> frontmatter. The cap is <code>skillListingMaxDescChars</code> (1,536) and covers
+      <code>description</code> + <code>" - "</code> + <code>whenToUse</code> as a <b>pair</b>; over it
+      the harness keeps <code>full[:1535]</code> and appends an ellipsis. Re-extracted verbatim from the
+      currently installed <code>2.1.222</code> binary this session — a <i>newer</i> build than the
+      <code>2.1.221</code> the workstream was originally measured against. All four constants unchanged;
+      only the minified identifiers moved.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> The uncomfortable part: the inspector's own tools</h2>
+    <p class="lead">This session's real findings. Each one is a check that ran, reported "all clear," and
+      was believed — while not actually checking what its name claimed. Every fix below was proved by
+      deliberately breaking it and watching it go red.</p>
+
+    <div class="callout aha"><h3><span class="i">🧰</span>A "is my tape measure current?" test that passed on a broken tape measure</h3>
+      <p>Six repos keep their own copy of the inspection script. One had a test literally named
+        <i>"the vendored gate is current with upstream, not a stale fork."</i> It worked by checking that
+        three words appeared in the file. The copy <b>was</b> stale — and outdated in a way that made it
+        report false alarms — but all three words were still there, because the change was <i>inside</i> a
+        function whose name never changed. <b>284 out of 284 tests green</b>, the whole time.</p>
+      <p>Now it compares a fingerprint of the whole file, minus its own local note. Put the old copy back
+        and it fails, <b>by name</b>.</p></div>
+
+    <div class="callout aha"><h3><span class="i">🚪</span>The corruption check only walked the front rooms</h3>
+      <p>A separate defect can scramble a description without changing its length — so no size check can
+        see it. The inspector did look for it, but only in skills the model can summon on its own. In one
+        repo <b>74 of its 94 skills</b> weren't in that category at the time — 76 of 96 today. So for the large majority, a scrambled
+        description was <b>neither reported nor failed</b>. That is exactly why four real cases there had
+        to be found by running the tool in a <b>different mode</b>, rather than by the build check that was
+        supposed to catch them.</p></div>
+
+    <div class="callout aha"><h3><span class="i">🪞</span>The tool that preaches "leave room" had three characters of it</h3>
+      <p>Its own published rule says <i>leave 30–50 characters spare, or your next edit breaks it.</i> Its
+        own board sat <b>3</b> characters from the edge — and its warning list lumped that in with boards
+        that had <b>340</b> spare, same colour, no ordering. Retrimmed to <b>53</b> spare, and the warning
+        list now separates the genuinely urgent.</p></div>
+
+    <div class="callout aha"><h3><span class="i">👻</span>A description pointing customers at a shop that doesn't exist</h3>
+      <p>One description ended by redirecting the reader to a sibling skill for a related job. That skill
+        <b>does not exist</b> — not in that repo, not installed, nowhere on the machine. The useful
+        distinction it was drawing is kept; the dead name is gone. Board shrank <b>1,465 → 1,423</b>, and
+        the trigger-phrase check reported nothing lost — <b>which, as the next finding shows, is weaker
+        evidence than it sounds</b>, so the removal was confirmed by hand as well.</p></div>
+
+    <div class="callout aha"><h3><span class="i">🕶️</span>The phrase-checker can't see half the phrases</h3>
+      <p>The tool that answers "did this edit drop any trigger phrases?" only recognises phrases written in
+        <b>double quotes</b>. Phrases written in backticks — error messages, flags, file paths — are
+        <b>invisible to it</b>. An earlier trim in another repo removed <b>three</b> backticked error
+        strings from a description and the checker cheerfully reported <b>nothing dropped</b>. That tool's
+        instructions now say so, and ship a <b>hand-run</b> recipe that catches them — the automated check
+        still can't see them.</p></div>
+
+    <div class="callout aha"><h3><span class="i">📋</span>A test that wrote its own answer sheet</h3>
+      <p>A snapshot test compares output against a saved copy. For one case the saved copy had never been
+        committed — so the test hit its "file missing, I'll create it" branch, wrote the file, and asserted
+        <b>literally nothing</b>. It had been reported as a passing test the entire time. Rename a section
+        inside that case and, before, the suite was <b>499 green</b>; now it is
+        <b>498 passing, 1 failing</b> — and the one failure is the snapshot test, by name.</p></div>
+
+    <div class="callout aha"><h3><span class="i">🔢</span>Published numbers that its own tool disagrees with</h3>
+      <p>A results table claimed "13 better / 25 unchanged / <b>1 marginally lower</b>." Re-running the
+        measuring script that now ships in that repo gives <b>12 better / 27 unchanged / 0 worse</b> — the
+        "1 marginally lower" row <b>doesn't exist</b>. Direction and size held up; the specifics didn't.
+        Corrected in place with a visible note rather than quietly overwritten.</p></div>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span> The finding I'd most like to have not found</h2>
+    <div class="callout"><h3><span class="i">📕</span>The handbook's page 1 was wrong — and would have done real damage</h3>
+      <p>The handoff document I was told to execute opened with: <i>re-copy the script everywhere, because
+        the new version fixed an off-by-one, so every "characters discarded" number now published is one
+        too low.</i></p>
+      <p><b>It wasn't.</b> One command comparing the two versions shows the only change was elsewhere
+        entirely; the arithmetic in question had been correct in the previous version, and every copy
+        already had it. Had I followed the instruction as written, I'd have gone through the <b>six repositories that keep a
+        copy of the script</b> and "corrected" every published character figure in them — all of which were
+        already right. That would have introduced exactly the kind of error the whole project exists to
+        eliminate. <span class="meta">how many figures: not counted — the handoff said "dozens" and I did
+        not verify that word</span></p>
+      <p>Why it happened: the handoff was written by the session that did the work, from memory of
+        <i>why</i> a version was cut, not from the change itself. Its own advice — <i>verify nothing you
+        have not run a command to confirm</i> — applied to itself. A handoff is the one document nobody
+        re-audits, because it reads as the authority.</p></div>
+    <p class="eng">Engineer's note: <code>git diff 4dc1a62 HEAD -- scripts/check_skill_descriptions.py</code>
+      touches only <code>find_wrap_corruption()</code>. <code>desc_chars - (MAX_DESC_CHARS - 1)</code> was
+      already present in v2.2.0, and <code>grep -c</code> returned 4 in every vendored copy before
+      re-vendoring. The claim is struck in the handoff and restated in the commit bodies of the six round-3 changes that had inherited it.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span> Where things stand now</h2>
+    <p class="lead">Measured against the <b>real installation</b> — the copies actually loaded on this
+      machine, not the source repositories. That distinction sank a previous round — and, as the
+      limits box records, it caught one of my own changes in this one too.</p>
+    <div class="tiles">
+      <div class="tile t-good"><div class="k">Boards over the edge</div><div class="v">0</div><div class="note">of the 103 model-invocable — the other 89 never enter the listing</div></div>
+      <div class="tile t-good"><div class="k">Scrambled descriptions</div><div class="v">0</div><div class="note">now counted across all skills</div></div>
+      <div class="tile t-good"><div class="k">Dead trigger phrases</div><div class="v">0</div><div class="note">down from 30 before this workstream</div></div>
+      <div class="tile t-warn"><div class="k">Boards nearly full</div><div class="v">5</div><div class="note">under 40 chars spare — newly visible</div></div>
+      <div class="tile t-violet"><div class="k">Changes merged</div><div class="v">17</div><div class="note">11 carried a version bump and reached the install; 6 are CI/docs-only</div></div>
+      <div class="tile t-coin"><div class="k">Descriptions altered</div><div class="v">2</div><div class="note">of 103 — the rest untouched</div></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--dim)">That last tile matters: this was an accuracy pass, not a
+      rewrite. Only two skills changed what they <i>say</i>, and both were verified phrase-by-phrase to
+      have lost nothing.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span> You asked me to double-check two of them</h2>
+    <p class="lead">Both came back clean. One turned up a problem that wasn't mine.</p>
+    <table>
+      <tr><th>Check</th><th>agent-review-panel</th><th>agent-traffic-control</th></tr>
+      <tr><td>Description text changed?</td><td class="ok">no — byte-identical, 1,505 chars</td><td>1 of 20, deliberately (1,465 → 1,423)</td></tr>
+      <tr><td>Trigger/eval prompts changed?</td><td class="ok">no — 62 prompts, identical</td><td class="ok">no</td></tr>
+      <tr><td>Tests</td><td class="ok">499 / 499, same as before</td><td class="ok">validator clean, 0 warnings</td></tr>
+      <tr><td>Release checks</td><td class="ok">all green</td><td class="ok">CI green on main</td></tr>
+      <tr><td>Installed copy matches source</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+      <tr><td>Parallel-session work preserved</td><td>n/a</td><td class="ok">two releases landed mid-flight — both intact</td></tr>
+    </table>
+    <div class="callout"><h3><span class="i">🔎</span>What the second check turned up</h3>
+      <p><code>agent-traffic-control</code> had <b>two releases land from a parallel session while I was
+        working</b> — one of which forced me to rebase and renumber my own change. Both survived intact.
+        But each added a skill and updated <i>some</i> of the places the README states the total. The
+        headline said <b>94</b>, two sections below said <b>95</b>, and the real number was <b>96</b>.</p>
+      <p>Not caused by my changes — the drift is fully traceable to the two other releases. But it is
+        precisely the failure this whole project is about, arriving through the front door, so I fixed it
+        and shipped it as its own change.</p></div>
+  </section>
+
+  <section>
+    <h2><span class="num">⚖︎</span> Being straight with you (the limits)</h2>
+    <div class="callout aha"><h3><span class="i">🔁</span>The failure this report describes happened again — to me, in this session</h3>
+      <p>One of my own changes removed dead cross-references from <b>six shipped files</b> and bumped no
+        version. <code>claude plugin update</code> compares versions, saw them equal, and did nothing — so
+        <b>12 of the 32 removals were fixed in the repository and still live for an installed user</b>. My
+        commit message even asserted the opposite: <i>"nothing under a plugin source dir changed."</i></p>
+      <p>Nothing caught it. The live-install check measures board sizes and scrambling, not whether the
+        installed copy matches the repository — <b>it cannot see this class of failure at all</b>. It was
+        found by the fact-check on <i>this report</i>, after I had already told you the session was
+        delivered. Now bumped, shipped and re-verified: repository and installed copies are byte-identical
+        for all six files, and a scoped re-scan finds <b>0</b> stranded removals. A second instance turned
+        up in the same sweep — a dead name in another description — and is also shipped.</p>
+      <p>The honest read: <b>the count of things I found is not evidence that I found all of them.</b></p></div>
+    <ul class="tight">
+      <li><b>Under the cap does not mean visible — this is the big one.</b> A second, shared limit
+        collapses descriptions to a bare name when the whole catalogue is too big, and it drops the
+        <i>least-used</i> skills first, not the longest. Measured on this machine just now: the catalogue
+        needs <b>90,422</b> characters against a <b>40,000</b> budget even at a 1M-token context, so only
+        about <b>42%</b> of descriptions survive — the rest show as names only. At the 200k default it is
+        far worse. Fixing the boards was necessary; it was never sufficient, and no count in this report
+        should be read as "all these triggers are now working."</li>
+      <li><b>Five boards are still nearly full</b> — between 23 and 39 characters spare. None is broken.
+        Each is one edit from breaking. The tool now lists them separately instead of hiding them among
+        boards with ten times the room, but nobody has trimmed them yet.</li>
+      <li><b>I deliberately left about eleven dead cross-references in place.</b> I removed 32 that I
+        checked one by one. An automated sweep for the rest deleted references to a repository, a cloud
+        service and a session label — none of which were skills — so I threw that pass away rather than trust
+        it. The remainder need a human eye; several are real links to things that <i>do</i> exist
+        elsewhere.</li>
+      <li><b>1,536 is a default, not a law.</b> It is a setting: a Claude Code release, or a line in your
+        own <code>settings.json</code>, can change it. Every character figure in this report is conditional
+        on it — I re-read it from the currently installed binary, which is the best I can do, not a
+        guarantee it holds tomorrow.</li>
+      <li><b>The phrase-checker has a second blind spot I did not fix.</b> Beyond backticks: it compares
+        <i>word sets</i>, so rewriting "fires on X — separately, watch for Y" into "fires on X <i>whose</i>
+        Y" scores <b>identically</b> while quietly narrowing the trigger to people who already diagnosed Y.
+        No tool here catches that; it needs a human reading the diff.</li>
+      <li><b>The five nearly-full boards aren't the whole warning list</b> — 24 more sit above 75% of the
+        cap with more room to spare. None is at risk today.</li>
+      <li><b>One check is stricter than it was, and nothing has hit it yet.</b> The corruption check now
+        covers every skill. I verified all seven repositories were clean <i>before</i> tightening it, so
+        nothing broke on merge — but a repository with a pre-existing problem will now fail. The gate's own code comment records why the old scoping let four real cases sit unseen, and
+        the re-copied file's header warns that a red build here means the problem was always there.</li>
+      <li><b>Several figures here are inherited rather than re-measured by me:</b> the "12 over cap /
+        30 dead phrases" starting point and the "~41% survive" precedent come from the previous session's
+        write-up; "74 of 94", "340 characters spare" and "four real corruptions" come from this session's
+        commit messages. Everything in the tiles and the regression table I re-ran today.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">→</span> What's next</h2>
+    <ul class="chk">
+      <li class="d"><b>Done</b> — every accuracy defect found in the audit, fixed and shipped… <b>after</b>
+        the fact-check caught two that had been merged but never installed.</li>
+      <li class="d"><b>Done</b> — the inspection tool itself upgraded, and re-copied into all six repos.</li>
+      <li class="d"><b>Done</b> — verified against the live installation, not just the source.</li>
+      <li class="d"><b>Done</b> — the false instruction struck from the handoff so the next reader isn't misled.</li>
+      <li><b>Trim the five nearly-full boards</b> — the tool now names them; the procedure is written down and has a worked example.</li>
+      <li><b>Decide on the ~11 remaining dead cross-references</b> — by hand, deliberately. Do not automate.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">✓</span> Receipts</h2>
+    <table>
+      <tr><th>What</th><th>Where</th><th>Status</th></tr>
+      <tr><td>17 pull requests across 7 repositories</td><td>all squash-merged to <code>main</code>; 11 bumped a version and reached the install</td><td class="ok">merged</td></tr>
+      <tr><td>Inspection tool upgrade</td><td><code>context-police</code> v2.3.0</td><td class="ok">shipped + installed</td></tr>
+      <tr><td>Session state &amp; corrections</td><td><code>docs/handoffs/description-cap-workstream-handoff.md</code> §8</td><td class="ok">updated</td></tr>
+      <tr><td>Round-2 audit, marked historical</td><td><code>docs/handoffs/description-cap-open-findings.md</code></td><td class="ok">bannered</td></tr>
+      <tr><td>Live-install measurement</td><td>192 skills · 0 over cap · 0 scrambled · 0 dead phrases</td><td class="ok">exit 0</td></tr>
+      <tr><td>This report</td><td><code>docs/handoffs/description-cap-session-explainer.html</code></td><td class="ok">durable</td></tr>
+    </table>
+  </section>
+
+  <footer>🪧 Plain-English report · 2026-08-05 · figures re-measured this session except the inherited ones named in the limits · corrections stated, not buried 🔥🪙🌙⚡🎮</footer>
+  </main>
+
+  <script>
+  (function(){
+    var KEY="showandtell-theme", root=document.documentElement,
+        btns=document.querySelectorAll(".theme-switch button");
+    function set(t,save){
+      root.setAttribute("data-theme", t);
+      btns.forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.set===t)); });
+      if(save){ try{ localStorage.setItem(KEY,t); }catch(e){} }
+    }
+    var saved=null; try{ saved=localStorage.getItem(KEY); }catch(e){}
+    var prefLight=false; try{ prefLight=window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches; }catch(e){}
+    set(saved||(prefLight?"paper":"arcade"), false);
+    btns.forEach(function(b){ b.addEventListener("click", function(){ set(b.dataset.set, true); }); });
+  })();
+  </script>
+</body></html>
