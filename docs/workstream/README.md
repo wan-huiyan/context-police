@@ -1,6 +1,6 @@
 # Description-cap workstream — docs
 
-Relocated here 2026-08-05 from `~/Documents/docs/`, which was untracked and unbacked-up.
+Relocated here 2026-08-06 from `~/Documents/docs/`, which was untracked and unbacked-up.
 **This copy is canonical.**
 
 The workstream spans **seven repos** (`context-police`, `claude-ecosystem-hygiene`,

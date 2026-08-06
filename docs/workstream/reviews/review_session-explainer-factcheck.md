@@ -1,7 +1,7 @@
 # Review — adversarial fact-check of the session explainer (2 rounds)
 
 **Date:** 2026-08-05 · **Reviewer:** adversarial fact-checker subagent (`general-purpose`), fresh eyes, not the author
-**Artifact under review:** `docs/deliverables/description-cap-session-explainer.html`
+**Artifact under review:** `docs/workstream/deliverables/description-cap-session-explainer.html`
 **Protocol:** the `show-and-tell` skill's mandatory honesty gate (`references/fact-verifier.md`)
 **Sources given:** freshly re-measured ground truth (gate output, binary extraction, per-repo diffs) +
 the workstream handoff. Reviewer had read-only shell access and **re-derived claims independently**

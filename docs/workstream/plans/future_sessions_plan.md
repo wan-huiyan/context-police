@@ -43,7 +43,7 @@ restructuring. Bump every plugin whose SKILL.md you touch.
 and was discarded. See [ADR-0005](../decisions/0005-do-not-automate-dangling-reference-removal.md).
 **Dependencies:** none. Low value, nonzero risk — fine to leave indefinitely.
 
-### P4 — ~~Back up `~/Documents/docs/`~~ **RESOLVED 2026-08-05**
+### P4 — ~~Back up `~/Documents/docs/`~~ **RESOLVED 2026-08-06**
 Relocated into this repo at `docs/workstream/` — versioned, pushed and backed up with everything else.
 The copy under `~/Documents/docs/` is now a working scratch copy; treat `docs/workstream/` as canonical.
 

@@ -13,8 +13,8 @@ label-audit-skipped: >
 
 **Date:** 2026-08-05 (second session of the day) · **Owner:** wan-huiyan
 **Session id:** `aa1fa53d-0cdd-41ab-8f92-4381333da3b2`
-**Scope:** executed `~/Documents/docs/handoffs/` — the description-cap workstream handoff left by
-the previous session.
+**Scope:** executed the description-cap workstream handoff left by the previous session (then at
+`~/Documents/docs/handoffs/`; now canonical at `docs/workstream/` in this repo).
 
 > **Canonical state doc is [`description-cap-workstream-handoff.md`](./description-cap-workstream-handoff.md)**
 > — §8 (rounds 3 / 3b / 3c) and §9 (next-session prompt) were rewritten this session and are current.
@@ -57,7 +57,7 @@ explainer, *after* the session had been reported as delivered. See §3 and
 [ADR-0004](../decisions/0004-version-bump-required-for-any-shipped-file.md).
 
 **Deliverable:** a plain-English explainer of the whole workstream —
-[`docs/deliverables/description-cap-session-explainer.html`](../deliverables/description-cap-session-explainer.html).
+[`deliverables/description-cap-session-explainer.html`](../deliverables/description-cap-session-explainer.html).
 
 ---
 
@@ -112,15 +112,15 @@ Per-repo diffs are in the PRs cited in §1. Docs written this session:
 
 | File | Bucket |
 |---|---|
-| `docs/handoffs/description-cap-workstream-handoff.md` | handoffs — §8 rounds 3/3b/3c added, §4b false claim struck, §9 prompt rewritten |
-| `docs/handoffs/description-cap-open-findings.md` | handoffs — bannered HISTORICAL |
-| `docs/handoffs/session_2026-08-05b_handoff.md` | handoffs — this file |
-| `docs/handoffs/session_next_prompt.md` | handoffs — paste-ready next-session prompt |
-| `docs/decisions/0001…0005` | decisions — 5 ADRs |
-| `docs/analysis/analysis_skill-listing-constants-2.1.222.md` | analysis — binary re-verification |
-| `docs/reviews/review_session-explainer-factcheck.md` | reviews — fact-verifier, 2 rounds |
-| `docs/deliverables/description-cap-session-explainer.html` + `.provenance.md` | deliverables |
-| `docs/plans/future_sessions_plan.md` | plans |
+| `docs/workstream/handoffs/description-cap-workstream-handoff.md` | handoffs — §8 rounds 3/3b/3c added, §4b false claim struck, §9 prompt rewritten |
+| `docs/workstream/handoffs/description-cap-open-findings.md` | handoffs — bannered HISTORICAL |
+| `docs/workstream/handoffs/session_2026-08-05b_handoff.md` | handoffs — this file |
+| `docs/workstream/handoffs/session_next_prompt.md` | handoffs — paste-ready next-session prompt |
+| `docs/workstream/decisions/0001…0005` | decisions — 5 ADRs |
+| `docs/workstream/analysis/analysis_skill-listing-constants-2.1.222.md` | analysis — binary re-verification |
+| `docs/workstream/reviews/review_session-explainer-factcheck.md` | reviews — fact-verifier, 2 rounds |
+| `docs/workstream/deliverables/description-cap-session-explainer.html` + `.provenance.md` | deliverables |
+| `docs/workstream/plans/future_sessions_plan.md` | plans |
 | `~/.claude/projects/-Users-huiyan-Documents/memory/*` | memory — 2 new files, 2 updated, index updated |
 
 ---
@@ -171,4 +171,10 @@ its findings before acting was necessary, not ceremonial.
 
 ## 8. Stale docs to review
 
-Populated by the reverse-lint and skill-freshness passes — see the run output in §9 of the summary.
+**Nothing flagged.** `doc-freshness-reverse-lint` over the four memory files touched this session:
+no negation rules extracted, zero candidates. `skill_freshness_audit`: 59 skills scanned, **all
+fresh**, none past the 90-day window.
+
+Caught separately by the docs review on PR #12 and fixed before merge: §5 step 6 of the workstream
+handoff still published the retracted `13 / 25 / 1` coverage figure — the third surface to carry it,
+inside the very procedure the plan sends readers to. Corrected to `12 / 27 / 0`.

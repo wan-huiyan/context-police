@@ -8,11 +8,14 @@
 ```
 Continue the SKILL.md description-cap workstream.
 
-Read first, in this order:
-  ~/Documents/docs/handoffs/session_2026-08-05b_handoff.md          (last session, incl. review findings)
-  ~/Documents/docs/handoffs/description-cap-workstream-handoff.md   (§8 = current state, §4b has a STRUCK false claim)
-  ~/Documents/docs/plans/future_sessions_plan.md                    (prioritised backlog)
-  ~/Documents/docs/decisions/                                       (5 ADRs — read 0003 and 0004 before acting)
+Read first, in this order. These live in the context-police repo under
+docs/workstream/ -- that copy is CANONICAL. An older copy at ~/Documents/docs/
+is a scratch leftover and has already drifted; ignore it.
+
+  docs/workstream/handoffs/session_2026-08-05b_handoff.md          (last session, incl. review findings)
+  docs/workstream/handoffs/description-cap-workstream-handoff.md   (§8 = current state, §4b has a STRUCK false claim)
+  docs/workstream/plans/future_sessions_plan.md                    (prioritised backlog)
+  docs/workstream/decisions/                                       (5 ADRs -- read 0003 and 0004 before acting)
 
 STATE. Rounds 1, 2, 3, 3b and 3c are all merged AND delivered. 17 PRs across 7 repos;
 11 carried a version bump and reached the installed copies. context-police is at
@@ -32,7 +35,7 @@ merge-state claim. The same applies to review-agent output: the fact-verifier th
 found this session's best catch was itself wrong twice.
 
 --------------------------------------------------------------------------------
-TASK 1 (highest value) -- build the repo-vs-install parity check.
+TASK 1 (highest value) -- build the repo-vs-install parity check.  [issue #9]
 
 WHY: this session merged two changes that never reached an installed user, and
 NOTHING caught it. Not CI. Not the live-install gate -- which measures cap,
@@ -64,7 +67,7 @@ first -- check out one of those two commits, confirm the new check goes red,
 confirm it is green on HEAD. A check that has never failed has not been tested.
 
 --------------------------------------------------------------------------------
-TASK 2 -- headroom pass on the 5 skills the gate now names.
+TASK 2 -- headroom pass on the 5 skills the gate now names.  [issue #10]
 
 Run the gate; read the NO HEADROOM tier (v2.3.0 computes it for you):
       23 left  funnel-lever-vs-predictor-deleaked-forward-gap   [overnight-workflows]
@@ -89,7 +92,7 @@ INSTALL (active paths from installed_plugins.json, not the whole cache tree --
 it double-counts superseded version dirs).
 
 --------------------------------------------------------------------------------
-TASK 3 -- the ~11 remaining dangling `See also` refs. DO NOT AUTOMATE THIS.
+TASK 3 -- the ~11 remaining dangling `See also` refs. DO NOT AUTOMATE THIS.  [issue #11]
 
 32 were removed by hand this session. A regex sweep for the rest deleted bullets
 naming `the-project-repo` (a repo), `the-dashboard-service` (a Cloud Run service)
@@ -104,8 +107,6 @@ down what the scope excludes; the exclusion is where the next defect lives.
 
 --------------------------------------------------------------------------------
 HOUSEKEEPING, if you have appetite:
-  - ~/Documents is NOT a git repo, so everything under ~/Documents/docs/ is
-    untracked and unbacked-up. Consider `git init` or relocating it.
   - ~/.claude/usage-tracking/ has no README.md and the cctime fork is not
     installed at ~/.claude/tools/cctime-fork/ -- session metrics fall back to a
     tokens-only recompute with no cost figures. One-time setup is in

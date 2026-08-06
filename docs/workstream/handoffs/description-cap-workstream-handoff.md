@@ -117,8 +117,12 @@ committed. Either commit it or strike the numbers.
 4. Keep the NOT-for list — that is precision, and it stops false firing.
 5. **Score against `old[:1535]`**, what the model *actually saw* — not the full oversized source.
    The wrong baseline makes every honest trim look like a regression.
-6. **Expect the first attempt to regress.** Measured: 11 better / 18 same / **10 worse**. Diagnose
-   by set-differencing dropped words, restore exactly those, re-cut → 13 / 25 / 1.
+6. **Expect the first attempt to regress.** The first pass measured 11 better / 18 same / **10
+   worse**. Diagnose by set-differencing dropped words, restore exactly those, re-cut. The shipped
+   second pass measures **12 better / 27 same / 0 worse** against the committed harness. *(An earlier
+   revision of this step published "13 / 25 / 1" — that came from an uncommitted one-off and does not
+   reproduce; see §8 and `agent-review-panel` CHANGELOG v3.8.2. The first-pass figure is from an
+   intermediate state that was never committed and does not reproduce either.)*
 7. Track **separation** (positive mean − negative mean), not just recall.
 8. Leave 30–50 chars of headroom.
 9. Re-wrap with **`break_on_hyphens=False`** (see below).
@@ -137,7 +141,8 @@ the trigger now only fires for users who already diagnosed Y. Use
 
 **The cap is necessary, not sufficient.** Under the cap only means *no longer truncated*.
 `skillListingBudgetFraction` can still collapse a description to a bare name — **usage-ranked,
-not length-ranked**. Only ~41% of descriptions survive on this install at 1M context. Never
+not length-ranked**. Only ~41% of descriptions survive on this install at 1M context (upstream's
+figure; re-measured 2026-08-06 as **~42%** — 90,422 chars needed vs a 40,000 budget). Never
 headline "restored N triggers" without that caveat.
 
 ### Operational gotchas
@@ -162,7 +167,7 @@ headline "restored N triggers" without that caveat.
 
 | Tool | Location | Purpose |
 |---|---|---|
-| `check_skill_descriptions.py` | `context-police/scripts/` (v2.2.1, on main) | the gate: cap, triggers, wrap corruption, `--compare` |
+| `check_skill_descriptions.py` | `context-police/scripts/` (**v2.3.0**, on main) | the gate: cap, triggers, wrap corruption, `--compare`, `NO HEADROOM` tier |
 | `score_trigger_coverage.py` | `agent-review-panel/scripts/` | reproducible coverage scoring vs an eval suite |
 
 ```bash
@@ -202,7 +207,7 @@ landed mid-flight; it was 191 when round 3 closed), with both changed descriptio
 | `context-police` | #7 | 2.2.2 |
 | `claude-ecosystem-hygiene` | #16 | 1.10.2 / ecosystem-audit 1.2.3 |
 | `agent-review-panel` | #66 | 3.8.2 |
-| `overnight-workflows` | #22 | — (nothing under a plugin source dir) |
+| `overnight-workflows` | #22, **#24** | ~~— (nothing under a plugin source dir)~~ **false** — #22 changed 6 shipped `SKILL.md`; #24 bumped 3 plugins to ship them (round 3c) |
 | `agent-traffic-control` | #9 | 1.9.1 (rebased onto a mid-flight v1.9.0) |
 | `publish-skill` | #10 | 2.4.1 |
 | `skill-portfolio-existence-review` | #2 | 1.1.2 |
@@ -304,9 +309,11 @@ excludes — the exclusion is where the next defect lives.
 ```
 Continue the SKILL.md description-cap workstream.
 
-Read first:
-  ~/Documents/docs/handoffs/description-cap-workstream-handoff.md   (§8 = current state)
-  ~/Documents/docs/handoffs/description-cap-open-findings.md        (round-2 audit, now historical)
+Read first (canonical copies live in the context-police repo, docs/workstream/):
+  docs/workstream/handoffs/description-cap-workstream-handoff.md   (§8 = current state)
+  docs/workstream/handoffs/session_2026-08-05b_handoff.md          (last session + review findings)
+  docs/workstream/handoffs/description-cap-open-findings.md        (round-2 audit, now historical)
+  docs/workstream/plans/future_sessions_plan.md                    (backlog, issues #9/#10/#11)
 
 State: rounds 1, 2, 3, 3b and 3c are all merged and DELIVERED (context-police
 is at v2.3.0 and re-vendored everywhere). 17 PRs, 11 of which carried a version
